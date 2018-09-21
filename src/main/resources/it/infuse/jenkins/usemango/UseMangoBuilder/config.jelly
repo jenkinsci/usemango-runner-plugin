@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?jelly escape-by-default='true'?>
+<j:jelly 
+	xmlns:j="jelly:core" 
+	xmlns:f="/lib/form"
+	xmlns:st="jelly:stapler">
+	<f:entry field="projectId" title="Project ID">
+        <f:textbox/>
+    </f:entry>
+	<f:entry field="folderName" title="Folder name">
+        <f:textbox/>
+    </f:entry>
+	<f:entry field="testName" title="Test name">
+        <f:textbox/>
+    </f:entry>
+    <f:entry field="testStatus" title="Test status">
+        <f:textbox/>
+    </f:entry>
+    <f:entry field="assignedTo" title="Assigned to">
+        <f:textbox/>
+    </f:entry>
+	<f:validateButton title="Validate" progress="Validating..." 
+		method="validateSettings" with="projectId,folderName,testName,testStatus,assignedTo" />
+</j:jelly>
