@@ -38,7 +38,6 @@ public class APIUtils {
 		data.put("email", email);
 		data.put("password", password);
 		data.put("executionOnly", true);
-		System.out.println("Data: "+data.toString());
 		JsonHttpContent httpContent = new JsonHttpContent(new JacksonFactory(), data);
 		HttpRequest request = requestFactory.buildPostRequest(url, httpContent);
 		HttpResponse response = request.execute();
@@ -70,24 +69,6 @@ public class APIUtils {
 	
 	public static GenericUrl getUseMangoUrl() {
 		return new GenericUrl(BASE_URL);
-	}
-	
-	public static void main(String[] args) {
-		try {
-			HttpCookie authCookie =  getSessionCookie("ian.bisset@infuse.it", "usemangouser");
-			
-			TestIndexParams params = new TestIndexParams();
-			params.setProjectId("TeamTests");
-			params.setFolderName("");
-			params.setTestName("test");
-			params.setTestStatus("");
-			params.setAssignedTo("");
-			
-			TestIndexResponse response = getTestIndex(params, authCookie);
-			System.out.println(response.getItems().size());
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
 	}
 	
 }
