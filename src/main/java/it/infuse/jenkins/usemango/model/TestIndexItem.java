@@ -5,17 +5,17 @@ import com.google.api.client.util.Key;
 
 public class TestIndexItem extends GenericJson {
 
-	@Key
+	@Key("Id")
 	private String id;
-	@Key
+	@Key("Name")
 	private String name;
-	@Key
+	@Key("Status")
 	private String status;
-	@Key
+	@Key("Folder")
 	private String folder;
-	@Key
+	@Key("Assignee")
 	private String assignee;
-	@Key
+	@Key("LastModified")
 	private String lastModified;
 
 	/**

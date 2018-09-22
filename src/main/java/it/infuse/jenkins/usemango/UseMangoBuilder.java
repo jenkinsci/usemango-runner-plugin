@@ -2,8 +2,6 @@ package it.infuse.jenkins.usemango;
 
 import java.io.IOException;
 import java.net.HttpCookie;
-import java.net.URLDecoder;
-import java.net.URLEncoder;
 import java.util.Collections;
 import java.util.List;
 
@@ -18,6 +16,8 @@ import com.cloudbees.plugins.credentials.CredentialsMatchers;
 import com.cloudbees.plugins.credentials.CredentialsProvider;
 import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials;
 import com.cloudbees.plugins.credentials.domains.DomainRequirement;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 
 import hudson.Extension;
 import hudson.FilePath;
@@ -29,6 +29,7 @@ import hudson.security.ACL;
 import hudson.tasks.BuildStepDescriptor;
 import hudson.tasks.Builder;
 import hudson.util.FormValidation;
+import it.infuse.jenkins.usemango.exception.UseMangoException;
 import it.infuse.jenkins.usemango.model.TestIndexParams;
 import it.infuse.jenkins.usemango.model.TestIndexResponse;
 import it.infuse.jenkins.usemango.util.APIUtils;
@@ -37,6 +38,9 @@ import jenkins.tasks.SimpleBuildStep;
 
 public class UseMangoBuilder extends Builder implements SimpleBuildStep {
 
+	private static StandardUsernamePasswordCredentials credentials;
+	private static String useMangoUrl;
+	
 	private String projectId;
 	private String folderName;
 	private String testName;
@@ -56,23 +60,29 @@ public class UseMangoBuilder extends Builder implements SimpleBuildStep {
 	public void perform(Run<?, ?> run, FilePath workspace, Launcher launcher, TaskListener listener)
 			throws InterruptedException, IOException {
 		
-		StandardUsernamePasswordCredentials credentials = getCredentials(UseMangoConfiguration.get().getCredentialsId());
-		String useMangoUrl = UseMangoConfiguration.get().getLocation();
-		
-		if (credentials == null) {
-            listener.error("Invalid credentials: Please set credentials in useMango global configuration");
-            throw new RuntimeException("Invalid credentials");
-        }
-		else if(StringUtils.isBlank(useMangoUrl)) {
-			listener.error("Invalid location: Please set location in useMango global configuration");
-            throw new RuntimeException("Invalid location");
+		Gson gson = new GsonBuilder().setPrettyPrinting().create();
+		TestIndexParams params = new TestIndexParams(); 
+		params.setAssignedTo(this.assignedTo);
+		params.setFolderName(this.folderName);
+		params.setProjectId(this.projectId);
+		params.setTestName(this.testName);
+		params.setTestStatus(this.testStatus);
+		listener.getLogger().println("TestIndex API parameters:\n"+gson.toJson(params));
+		try {
+			TestIndexResponse indexes = getTestIndexes(params);
+			if(indexes != null && indexes.getItems() != null && !indexes.getItems().isEmpty()) {
+				listener.getLogger().println("Tests retrieved:\n"+gson.toJson(indexes.getItems()));
+				indexes.getItems().forEach((item) -> 
+					listener.getLogger().println("Test name: "+item.getName()));
+				// TODO: Execute tests
+			}
+			else {
+				listener.getLogger().println("No tests returned from useMango, build stopped.");
+				listener.getLogger().println("Please check your useMango project setting and try again.");
+			}
+		} catch (UseMangoException e) {
+			throw new RuntimeException(e.getMessage());
 		}
-		else {
-			listener.getLogger().println("Location: "+useMangoUrl);
-			listener.getLogger().println("Username: "+credentials.getUsername());
-			listener.getLogger().println("Password: "+credentials.getPassword());
-		}
-		
 	}
 	
     @Symbol("greet")
@@ -93,23 +103,20 @@ public class UseMangoBuilder extends Builder implements SimpleBuildStep {
     	        @QueryParameter("testStatus") final String testStatus,
     	        @QueryParameter("assignedTo") final String assignedTo) throws IOException, ServletException {
     		try {
-    			StandardUsernamePasswordCredentials credentials = getCredentials(UseMangoConfiguration.get().getCredentialsId());
-    			HttpCookie cookie = APIUtils.getSessionCookie(credentials.getUsername(), credentials.getPassword().getPlainText());
     			TestIndexParams params = new TestIndexParams(); 
     			params.setAssignedTo(assignedTo);
     			params.setFolderName(folderName);
     			params.setProjectId(projectId);
     			params.setTestName(testName);
     			params.setTestStatus(testStatus);
-    			TestIndexResponse indexes = APIUtils.getTestIndex(params, cookie);
-    			if(indexes != null && indexes.getItems() != null && indexes.getItems().size() > 0) {
-    				return FormValidation.okWithMarkup("Check account: <font color=\"green\">Pass</font><br/>"
-    						+"Check settings: <font color=\"green\">Pass ("+indexes.getItems().size()
-    						+" tests found)</font>");
-    			}
+    			TestIndexResponse indexes = getTestIndexes(params);
+    			if(indexes != null && indexes.getItems() != null && !indexes.getItems().isEmpty()) {
+    				return FormValidation.okWithMarkup("Checking account... done.<br/>Validating settings... done.<br/>"
+    						+"Result: <font color=\"green\">Success, "+indexes.getItems().size()+" test(s) found!</font>");
+    			} 
     			else {
-    				return FormValidation.warningWithMarkup("Check account: Pass<br/>"
-    						+"Check settings: Fail, no tests found. Please check settings match account and try again");
+    				return FormValidation.warningWithMarkup("Checking account... done.<br/>Validating settings... done.<br/>"
+    						+"Result: Warning, no tests found. Please check settings exist in account and try again.");
     			}
     		} catch (Exception e) {
     	        return FormValidation.error("Validation error: "+e.getMessage());
@@ -135,6 +142,19 @@ public class UseMangoBuilder extends Builder implements SimpleBuildStep {
 					Collections.<DomainRequirement> emptyList());
 		return CredentialsMatchers.firstOrNull(credentailsList,
                 CredentialsMatchers.allOf(CredentialsMatchers.withId(credentialsId)));
+	}
+	
+	private static TestIndexResponse getTestIndexes(TestIndexParams params) throws IOException, UseMangoException {
+		useMangoUrl = UseMangoConfiguration.get().getLocation();
+		credentials = getCredentials(UseMangoConfiguration.get().getCredentialsId());
+		
+		if(StringUtils.isBlank(useMangoUrl) || !useMangoUrl.startsWith("http")) 
+			throw new UseMangoException("Invalid useMango url in global configuration");
+		if(credentials == null) 
+			throw new UseMangoException("Invalid useMango credentials in global configuration");
+		
+		HttpCookie cookie = APIUtils.getSessionCookie(useMangoUrl, credentials.getUsername(), credentials.getPassword().getPlainText());
+		return APIUtils.getTestIndex(useMangoUrl, params, cookie);
 	}
 
 	/**

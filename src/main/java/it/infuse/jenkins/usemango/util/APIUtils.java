@@ -26,13 +26,12 @@ public class APIUtils {
 	static HttpTransport HTTP_TRANSPORT = new NetHttpTransport();
     static JsonFactory JSON_FACTORY = new JacksonFactory();
     
-    final static String BASE_URL 			= "https://qa.usemango.co.uk";
     final static String ENDPOINT_SESSION 	= "/v1.5/session";
     final static String ENDPOINT_TESTINDEX 	= "/v1.5/projects/%s/testindex";
     
-	public static HttpCookie getSessionCookie(String email, String password) throws UseMangoException, IOException {
+	public static HttpCookie getSessionCookie(String useMangoUrl, String email, String password) throws UseMangoException, IOException {
 		HttpRequestFactory requestFactory = HTTP_TRANSPORT.createRequestFactory();
-		GenericUrl url = getUseMangoUrl();
+		GenericUrl url = new GenericUrl(useMangoUrl);
 		url.setRawPath(ENDPOINT_SESSION);
 		GenericData data = new GenericData();
 		data.put("email", email);
@@ -49,11 +48,11 @@ public class APIUtils {
 				.orElseThrow(() -> new UseMangoException("Auth cookie not found in /session response"));
 	}
 	
-	public static TestIndexResponse getTestIndex(TestIndexParams params, HttpCookie authCookie) throws IOException {
+	public static TestIndexResponse getTestIndex(String useMangoUrl, TestIndexParams params, HttpCookie authCookie) throws IOException {
 		HttpRequestFactory requestFactory = HTTP_TRANSPORT.createRequestFactory(
 				(HttpRequest request) -> {request.setParser(new JsonObjectParser(JSON_FACTORY));
         });
-	    GenericUrl url = getUseMangoUrl();
+	    GenericUrl url = new GenericUrl(useMangoUrl);
 		url.setRawPath(String.format(ENDPOINT_TESTINDEX, params.getProjectId()));
 		url.set("folder", params.getFolderName());
 		url.set("filter", params.getTestName());
@@ -65,10 +64,6 @@ public class APIUtils {
 		headers.setCookie(authCookie.toString());
 		request.setHeaders(headers);
 		return request.execute().parseAs(TestIndexResponse.class);
-	}
-	
-	public static GenericUrl getUseMangoUrl() {
-		return new GenericUrl(BASE_URL);
 	}
 	
 }
