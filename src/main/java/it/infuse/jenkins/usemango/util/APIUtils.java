@@ -16,6 +16,8 @@ import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.JsonObjectParser;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.client.util.GenericData;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 
 import it.infuse.jenkins.usemango.exception.UseMangoException;
 import it.infuse.jenkins.usemango.model.TestIndexParams;
@@ -52,17 +54,62 @@ public class APIUtils {
 		HttpRequestFactory requestFactory = HTTP_TRANSPORT.createRequestFactory(
 				(HttpRequest request) -> {request.setParser(new JsonObjectParser(JSON_FACTORY));
         });
-	    GenericUrl url = new GenericUrl(useMangoUrl);
-		url.setRawPath(String.format(ENDPOINT_TESTINDEX, params.getProjectId()));
-		url.set("folder", params.getFolderName());
-		url.set("filter", params.getTestName());
-		url.set("status", params.getTestStatus());
-		url.set("assignee", params.getAssignedTo());
-		HttpRequest request = requestFactory.buildGetRequest(url);
-		HttpHeaders headers = new HttpHeaders();
-		headers.setCookie(authCookie.toString());
-		request.setHeaders(headers);
-		return request.execute().parseAs(TestIndexResponse.class);
+		
+		TestIndexResponse response = null;
+		while(true) { // handle pagination
+		    GenericUrl url = new GenericUrl(useMangoUrl);
+			url.setRawPath(String.format(ENDPOINT_TESTINDEX, params.getProjectId()));
+			url.set("folder", params.getFolderName());
+			url.set("filter", params.getTestName());
+			url.set("status", params.getTestStatus());
+			url.set("assignee", params.getAssignedTo());
+			if(isAnotherPage(response)) url.set("cursor", response.getInfo().getNext());
+			System.out.println(url);
+			HttpRequest request = requestFactory.buildGetRequest(url);
+			HttpHeaders headers = new HttpHeaders();
+			headers.setCookie(authCookie.toString());
+			request.setHeaders(headers);
+			if(isAnotherPage(response)) {
+				TestIndexResponse tmpResponse = request.execute().parseAs(TestIndexResponse.class);
+				response.getItems().addAll(tmpResponse.getItems());
+				response.getInfo().setHasNext(tmpResponse.getInfo().isHasNext());
+				response.getInfo().setNext(tmpResponse.getInfo().getNext());
+			}
+			else {
+				response = request.execute().parseAs(TestIndexResponse.class);
+			}
+			if(!response.getInfo().isHasNext()) break; // exit when no more pages
+		}
+		return response;
+	}
+	
+	private static boolean isAnotherPage(TestIndexResponse response) {
+		if(response != null && response.getInfo() != null && response.getInfo().isHasNext()) {
+			return true;
+		}
+		else return false;
+	}
+	
+	// testing
+	public static void main(String[] args) {
+		try {
+			String username = "ian.bisset@infuse.it";
+			String password = "usemangouser";
+			String umUrl = "https://qa.usemango.co.uk";
+			HttpCookie cookie = getSessionCookie(umUrl, username, password);
+			TestIndexParams params = new TestIndexParams();
+			params.setAssignedTo("");
+			params.setFolderName("useMango");
+			params.setProjectId("Ian");
+			params.setTestName("");
+			params.setTestStatus("");
+			TestIndexResponse response = getTestIndex(umUrl, params, cookie);
+			Gson gson = new GsonBuilder().setPrettyPrinting().create();
+			System.out.println(gson.toJson(response));
+			System.out.println("Items: "+response.getItems().size());
+		} catch(Exception e) {
+			e.printStackTrace();
+		}
 	}
 	
 }
