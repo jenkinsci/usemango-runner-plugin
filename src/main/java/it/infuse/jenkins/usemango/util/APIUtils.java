@@ -59,7 +59,6 @@ public class APIUtils {
 		url.set("status", params.getTestStatus());
 		url.set("assignee", params.getAssignedTo());
 		HttpRequest request = requestFactory.buildGetRequest(url);
-		System.out.println(url);
 		HttpHeaders headers = new HttpHeaders();
 		headers.setCookie(authCookie.toString());
 		request.setHeaders(headers);

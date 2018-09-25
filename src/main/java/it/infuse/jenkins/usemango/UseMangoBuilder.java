@@ -1,5 +1,6 @@
 package it.infuse.jenkins.usemango;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.HttpCookie;
 import java.util.Collections;
@@ -22,12 +23,17 @@ import com.google.gson.GsonBuilder;
 import hudson.Extension;
 import hudson.FilePath;
 import hudson.Launcher;
+import hudson.Launcher.ProcStarter;
+import hudson.Proc;
 import hudson.model.AbstractProject;
+import hudson.model.Computer;
+import hudson.model.Label;
 import hudson.model.Run;
 import hudson.model.TaskListener;
 import hudson.security.ACL;
 import hudson.tasks.BuildStepDescriptor;
 import hudson.tasks.Builder;
+import hudson.util.ArgumentListBuilder;
 import hudson.util.FormValidation;
 import it.infuse.jenkins.usemango.exception.UseMangoException;
 import it.infuse.jenkins.usemango.model.TestIndexParams;
@@ -59,7 +65,6 @@ public class UseMangoBuilder extends Builder implements SimpleBuildStep {
 	@Override
 	public void perform(Run<?, ?> run, FilePath workspace, Launcher launcher, TaskListener listener)
 			throws InterruptedException, IOException {
-		
 		Gson gson = new GsonBuilder().setPrettyPrinting().create();
 		TestIndexParams params = new TestIndexParams(); 
 		params.setAssignedTo(this.assignedTo);
@@ -70,16 +75,44 @@ public class UseMangoBuilder extends Builder implements SimpleBuildStep {
 		listener.getLogger().println("TestIndex API parameters:\n"+gson.toJson(params));
 		try {
 			TestIndexResponse indexes = getTestIndexes(params);
-			if(indexes != null && indexes.getItems() != null && !indexes.getItems().isEmpty()) {
-				listener.getLogger().println("Tests retrieved:\n"+gson.toJson(indexes.getItems()));
-				indexes.getItems().forEach((item) -> 
-					listener.getLogger().println("Test name: "+item.getName()));
-				// TODO: Execute tests
-			}
-			else {
-				listener.getLogger().println("No tests returned from useMango, build stopped.");
-				listener.getLogger().println("Please check your useMango project setting and try again.");
-			}
+			listener.getLogger().println("Tests retrieved:\n"+gson.toJson(indexes.getItems()));
+			indexes.getItems().forEach((item) -> {
+				
+				listener.getLogger().println("Executing test: "+item.getName());
+				ArgumentListBuilder command = new ArgumentListBuilder();
+	            StringBuffer sb = new StringBuffer("\""+File.separator+"Program Files (x86)");
+	            sb.append(File.separator+"Infuse Consulting");
+	            sb.append(File.separator+"useMango");
+	            sb.append(File.separator+"App");
+	            sb.append(File.separator+"MangoMotor.exe\"");
+	            sb.append(" -s \""+useMangoUrl+"\"");
+	            sb.append(" -p \""+this.projectId+"\"");
+	            sb.append(" --testname \""+item.getName()+"\"");
+	            sb.append(" -e \""+credentials.getUsername()+"\"");
+	            sb.append(" -a \""+credentials.getPassword().getPlainText()+"\"");
+	            command.addTokenized(sb.toString());
+	            
+//	            Label labelToFind = Label.get("usemango");
+//	            labelToFind.getNodes().forEach((node)-> {
+//	            	listener.getLogger().println("Node used: "+node.getDisplayName());
+//	            	Computer computer = node.toComputer();
+//	            	if(computer != null && computer.isOnline() && computer.isAcceptingTasks()) {
+//		            	Launcher umLanucher = node.createLauncher(listener);
+		            	ProcStarter umStarter = launcher.new ProcStarter();
+		            	umStarter = umStarter.cmds(command).stdout(listener);
+		            	try {
+		            		umStarter = umStarter.pwd(workspace).envs(run.getEnvironment(listener));
+							Proc proc = launcher.launch(umStarter);
+							int exitCode = proc.join();
+				            if(exitCode == 0) listener.getLogger().println("Test finished successfully");
+				            else listener.error("Test failed with exit code: "+exitCode);
+						} catch (IOException | InterruptedException e) {
+							throw new RuntimeException(e.getMessage());
+						}
+//	            	}
+//	            });
+	            
+			});
 		} catch (UseMangoException e) {
 			throw new RuntimeException(e.getMessage());
 		}
