@@ -21,16 +21,12 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
 import hudson.Extension;
-import hudson.FilePath;
 import hudson.Launcher;
-import hudson.Launcher.ProcStarter;
-import hudson.Proc;
+import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
-import hudson.model.Computer;
-import hudson.model.Label;
-import hudson.model.Run;
-import hudson.model.TaskListener;
+import hudson.model.BuildListener;
 import hudson.security.ACL;
+import hudson.tasks.BuildStep;
 import hudson.tasks.BuildStepDescriptor;
 import hudson.tasks.Builder;
 import hudson.util.ArgumentListBuilder;
@@ -40,9 +36,8 @@ import it.infuse.jenkins.usemango.model.TestIndexParams;
 import it.infuse.jenkins.usemango.model.TestIndexResponse;
 import it.infuse.jenkins.usemango.util.APIUtils;
 import jenkins.model.Jenkins;
-import jenkins.tasks.SimpleBuildStep;
 
-public class UseMangoBuilder extends Builder implements SimpleBuildStep {
+public class UseMangoBuilder extends Builder implements BuildStep {
 
 	private static StandardUsernamePasswordCredentials credentials;
 	private static String useMangoUrl;
@@ -63,7 +58,7 @@ public class UseMangoBuilder extends Builder implements SimpleBuildStep {
 	}
 	
 	@Override
-	public void perform(Run<?, ?> run, FilePath workspace, Launcher launcher, TaskListener listener)
+	public boolean perform(AbstractBuild<?,?> build, Launcher launcher, BuildListener listener) 
 			throws InterruptedException, IOException {
 		Gson gson = new GsonBuilder().setPrettyPrinting().create();
 		TestIndexParams params = new TestIndexParams(); 
@@ -76,9 +71,9 @@ public class UseMangoBuilder extends Builder implements SimpleBuildStep {
 		try {
 			TestIndexResponse indexes = getTestIndexes(params);
 			listener.getLogger().println("Tests retrieved:\n"+gson.toJson(indexes.getItems()));
+			
 			indexes.getItems().forEach((item) -> {
 				
-				listener.getLogger().println("Executing test: "+item.getName());
 				ArgumentListBuilder command = new ArgumentListBuilder();
 	            StringBuffer sb = new StringBuffer("\""+File.separator+"Program Files (x86)");
 	            sb.append(File.separator+"Infuse Consulting");
@@ -92,30 +87,26 @@ public class UseMangoBuilder extends Builder implements SimpleBuildStep {
 	            sb.append(" -a \""+credentials.getPassword().getPlainText()+"\"");
 	            command.addTokenized(sb.toString());
 	            
-//	            Label labelToFind = Label.get("usemango");
-//	            labelToFind.getNodes().forEach((node)-> {
-//	            	listener.getLogger().println("Node used: "+node.getDisplayName());
-//	            	Computer computer = node.toComputer();
-//	            	if(computer != null && computer.isOnline() && computer.isAcceptingTasks()) {
-//		            	Launcher umLanucher = node.createLauncher(listener);
-		            	ProcStarter umStarter = launcher.new ProcStarter();
-		            	umStarter = umStarter.cmds(command).stdout(listener);
-		            	try {
-		            		umStarter = umStarter.pwd(workspace).envs(run.getEnvironment(listener));
-							Proc proc = launcher.launch(umStarter);
-							int exitCode = proc.join();
-				            if(exitCode == 0) listener.getLogger().println("Test finished successfully");
-				            else listener.error("Test failed with exit code: "+exitCode);
-						} catch (IOException | InterruptedException e) {
-							throw new RuntimeException(e.getMessage());
-						}
-//	            	}
-//	            });
+//	            TODO: Fix recursive adding of tasks - 
+//	            	look at UseMangoTestTask.. it may need to implement BuildableItem instead of using this methods 'build' instance? 	            
+//	            Jenkins.getInstance().getQueue().schedule2(new UseMangoTestTask(build, launcher, listener, item, command), 
+//	            		Jenkins.getInstance().getQuietPeriod());
 	            
+	            // Use this for now - executes all on same node
+	            try {
+	            	Jenkins.getInstance().getQueue().execute(
+							new UseMangoTestExecutor(build, launcher, listener, item, command), build.getProject());
+	            } catch(Exception e) {
+	            	listener.error("Error executing test: "+item.getName());
+	            	listener.error(e.getMessage());
+	            	
+	            }
 			});
-		} catch (UseMangoException e) {
+			
+		} catch (Exception e) {
 			throw new RuntimeException(e.getMessage());
 		}
+		return true;
 	}
 	
     @Symbol("greet")
@@ -144,12 +135,24 @@ public class UseMangoBuilder extends Builder implements SimpleBuildStep {
     			params.setTestStatus(testStatus);
     			TestIndexResponse indexes = getTestIndexes(params);
     			if(indexes != null && indexes.getItems() != null && !indexes.getItems().isEmpty()) {
-    				return FormValidation.okWithMarkup("Checking account... done.<br/>Validating settings... done.<br/>"
-    						+"Result: <font color=\"green\">Success, "+indexes.getItems().size()+" test(s) found!</font>");
+    				int size = indexes.getItems().size();
+    				
+    				StringBuilder resultsHtml = new StringBuilder("<div style=\"padding-top:5px;\">");
+    				resultsHtml.append("<table border=\"1\" cellspacing=\"0\" cellpadding=\"0\">");
+    				resultsHtml.append("<tr><th>Name</th><th>Folder</th><th>Status</th><th>Assigned To</th></tr>");
+    				indexes.getItems().forEach((item)->{
+    					resultsHtml.append("<tr><td>"+item.getName()+"</td><td>"+item.getFolder()+"</td><td>"+item.getStatus()+"</td><td>"+item.getAssignee()+"</td></tr>");
+    				});
+    				resultsHtml.append("</table>");
+    				resultsHtml.append("</div>");
+    				
+    				return FormValidation.okWithMarkup("Checking account... done.<br/>Validating settings... done.<br/><br/>"
+    						+"<b><font color=\"green\">Success, "+size+" test"+((size>1)?"s":"")+" found:</font></b><br/>"
+    						+resultsHtml);
     			} 
     			else {
     				return FormValidation.warningWithMarkup("Checking account... done.<br/>Validating settings... done.<br/>"
-    						+"Result: Warning, no tests found. Please check settings exist in account and try again.");
+    						+"Warning, no tests found. Please check settings exist in account and try again.");
     			}
     		} catch (Exception e) {
     	        return FormValidation.error("Validation error: "+e.getMessage());
