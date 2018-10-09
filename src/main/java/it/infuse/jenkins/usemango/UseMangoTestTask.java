@@ -1,11 +1,11 @@
 package it.infuse.jenkins.usemango;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 
 import org.acegisecurity.AccessDeniedException;
 
-import hudson.Launcher;
 import hudson.model.AbstractBuild;
 import hudson.model.BuildListener;
 import hudson.model.Label;
@@ -17,60 +17,62 @@ import hudson.model.queue.SubTask;
 import hudson.security.ACL;
 import hudson.security.AccessControlled;
 import hudson.security.Permission;
-import hudson.util.ArgumentListBuilder;
+import it.infuse.jenkins.usemango.enums.UseMangoNodeLabel;
 import it.infuse.jenkins.usemango.model.TestIndexItem;
 
 public class UseMangoTestTask extends AbstractQueueTask implements AccessControlled {
 
+	private final Node node;
 	private final AbstractBuild<?,?> build;
-	private final Launcher launcher;
 	private final BuildListener listener;
 	private final TestIndexItem item;
-	private final ArgumentListBuilder command;
+	private final String command;
 
-    public UseMangoTestTask(AbstractBuild<?,?> build, Launcher launcher, BuildListener listener, 
-    		TestIndexItem item, ArgumentListBuilder command) {
+    public UseMangoTestTask(Node node, AbstractBuild<?,?> build, BuildListener listener, 
+    		TestIndexItem item, String command) {
+    	this.node = node;
     	this.build = build;
-    	this.launcher = launcher;
         this.listener = listener;
         this.item = item;
         this.command = command;
     }
 
     public String getName() {
-        return "test_"+item.getId();
+        return "test_for_"+build.getParent().getName();
     }
 
     public String getFullDisplayName() {
-        return build.getDisplayName()+"_"+getName();
+        return this.getName();
     }
 
     public String getUrl() {
-        return build.getUrl();
+        return "";
     }
 
     public String getDisplayName() {
-        return getFullDisplayName();
+        return this.getName();
     }
 
     @Override
     public Label getAssignedLabel() {
-        return build.getProject().getAssignedLabel();
+        return Label.get(UseMangoNodeLabel.USEMANGO.toString());
     }
 
     @Override
     public Node getLastBuiltOn() {
-        return build.getBuiltOn();
+        return node;
     }
 
     @Override
     public long getEstimatedDuration() {
-        return build.getEstimatedDuration();
+        return -1;
     }
 
 	@Override
 	public Collection<? extends SubTask> getSubTasks() {
-		return build.getProject().getSubTasks();
+		ArrayList<SubTask> tasks = new ArrayList<SubTask>();
+		tasks.add(this);
+		return tasks;
 	}
 
 	@Override
@@ -80,7 +82,7 @@ public class UseMangoTestTask extends AbstractQueueTask implements AccessControl
 
 	@Override
 	public ACL getACL() {
-		return build.getACL();
+		return build.getProject().getACL();
 	}
 
 	@Override
@@ -114,6 +116,6 @@ public class UseMangoTestTask extends AbstractQueueTask implements AccessControl
 	}
 	
     public Executable createExecutable() throws IOException {
-        return new UseMangoTestExecutor(build, launcher, listener, item, command);
+        return new UseMangoTestExecutor(node, this, build.getWorkspace(), listener, item, command);
     }
 }

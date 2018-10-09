@@ -1,8 +1,8 @@
 package it.infuse.jenkins.usemango;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.HttpCookie;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -25,12 +25,14 @@ import hudson.Launcher;
 import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
 import hudson.model.BuildListener;
+import hudson.model.Label;
+import hudson.model.Node;
 import hudson.security.ACL;
 import hudson.tasks.BuildStep;
 import hudson.tasks.BuildStepDescriptor;
 import hudson.tasks.Builder;
-import hudson.util.ArgumentListBuilder;
 import hudson.util.FormValidation;
+import it.infuse.jenkins.usemango.enums.UseMangoNodeLabel;
 import it.infuse.jenkins.usemango.exception.UseMangoException;
 import it.infuse.jenkins.usemango.model.TestIndexParams;
 import it.infuse.jenkins.usemango.model.TestIndexResponse;
@@ -60,6 +62,7 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	@Override
 	public boolean perform(AbstractBuild<?,?> build, Launcher launcher, BuildListener listener) 
 			throws InterruptedException, IOException {
+		
 		Gson gson = new GsonBuilder().setPrettyPrinting().create();
 		TestIndexParams params = new TestIndexParams(); 
 		params.setAssignedTo(this.assignedTo);
@@ -68,44 +71,59 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 		params.setTestName(this.testName);
 		params.setTestStatus(this.testStatus);
 		listener.getLogger().println("TestIndex API parameters:\n"+gson.toJson(params));
+		
+		TestIndexResponse indexes = null;
 		try {
-			TestIndexResponse indexes = getTestIndexes(params);
-			listener.getLogger().println("Tests retrieved:\n"+gson.toJson(indexes.getItems()));
+			indexes = getTestIndexes(params);
+		} catch (UseMangoException e) {
+			throw new RuntimeException(e);
+		}
 			
-			indexes.getItems().forEach((item) -> {
-				
-				ArgumentListBuilder command = new ArgumentListBuilder();
-	            StringBuffer sb = new StringBuffer("\""+File.separator+"Program Files (x86)");
-	            sb.append(File.separator+"Infuse Consulting");
-	            sb.append(File.separator+"useMango");
-	            sb.append(File.separator+"App");
-	            sb.append(File.separator+"MangoMotor.exe\"");
-	            sb.append(" -s \""+useMangoUrl+"\"");
-	            sb.append(" -p \""+this.projectId+"\"");
-	            sb.append(" --testname \""+item.getName()+"\"");
-	            sb.append(" -e \""+credentials.getUsername()+"\"");
-	            sb.append(" -a \""+credentials.getPassword().getPlainText()+"\"");
-	            command.addTokenized(sb.toString());
-	            
-//	            TODO: Fix recursive adding of tasks - 
-//	            	look at UseMangoTestTask.. it may need to implement BuildableItem instead of using this methods 'build' instance? 	            
-//	            Jenkins.getInstance().getQueue().schedule2(new UseMangoTestTask(build, launcher, listener, item, command), 
-//	            		Jenkins.getInstance().getQuietPeriod());
-	            
-	            // Use this for now - executes all on same node
-	            try {
-	            	Jenkins.getInstance().getQueue().execute(
-							new UseMangoTestExecutor(build, launcher, listener, item, command), build.getProject());
+		if(indexes != null && indexes.getItems() != null && indexes.getItems().size() > 0) {
+		
+			listener.getLogger().println(indexes.getItems().size() + " tests retrieved:\n"+gson.toJson(indexes.getItems()));
+			
+			// Copy immutable Set to non-immutable List for processing
+			List<Node> nodes = new ArrayList<Node>(Label.get(UseMangoNodeLabel.USEMANGO.toString()).getNodes());
+			if(nodes == null || nodes.size() < 1) {
+				throw new RuntimeException("No 'usemango' nodes configured, unable to execute tests");
+			}
+			
+			List<String> testIds = new ArrayList<String>();
+			indexes.getItems().forEach((test) -> {
+				try {
+					testIds.add(test.getId());
+					Node node = getNode(nodes);
+					listener.getLogger().println("Allocating node '"+node.getNodeName()+"' to run test: "+test.getId());
+		            Jenkins.getInstance().getQueue().schedule2(new UseMangoTestTask(node, build, listener, test, 
+		            		getUseMangoCommand(this.projectId, test.getName())), Jenkins.getInstance().getQuietPeriod());
 	            } catch(Exception e) {
-	            	listener.error("Error executing test: "+item.getName());
-	            	listener.error(e.getMessage());
-	            	
+	            	listener.error("Error executing test: "+test.getName());
+	            	throw new RuntimeException(e);
 	            }
 			});
 			
-		} catch (Exception e) {
-			throw new RuntimeException(e.getMessage());
+			String testId;
+			while(!testIds.isEmpty()) { // keep alive until all test tasks are done
+				testId = null;
+				for(String tempId : testIds) {
+					if(testIds != null && build != null && build.getWorkspace() != null &&  
+							build.getWorkspace().child(tempId).exists()) {
+						testId = tempId;
+					}
+				}
+				if(testId != null) testIds.remove(testId);
+				Thread.sleep(1000);
+			}
+			
+			listener.getLogger().println("\n\nTest execution complete.");
+			listener.getLogger().println("\nThanks for using useMango :-)\n");
+		
 		}
+		else {
+			listener.getLogger().println("No tests retrieved from useMango account, please check settings and try again.");
+		}
+		
 		return true;
 	}
 	
@@ -191,6 +209,29 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 		
 		HttpCookie cookie = APIUtils.getSessionCookie(useMangoUrl, credentials.getUsername(), credentials.getPassword().getPlainText());
 		return APIUtils.getTestIndex(useMangoUrl, params, cookie);
+	}
+	
+	private static String getUseMangoCommand(String projectId, String testName) {
+		StringBuffer sb = new StringBuffer("\"C:\\Program Files (x86)\\Infuse Consulting\\useMango\\App\\MangoMotor.exe\"");
+		sb.append(" -s \""+useMangoUrl+"\"");
+		sb.append(" -p \""+projectId+"\"");
+		sb.append(" -e \""+credentials.getUsername()+"\"");
+		sb.append(" -a \""+credentials.getPassword().getPlainText()+"\"");
+		sb.append(" --testname \""+testName+"\"");
+		return sb.toString();
+	}
+	
+	private Node getNode(List<Node> nodes) {
+		Node nodeToUse = null;
+		if(nodes == null || nodes.isEmpty()) {
+			nodes = new ArrayList<Node>(Label.get(UseMangoNodeLabel.USEMANGO.toString()).getNodes());
+		}
+		for(Node tempNode : nodes) {
+			nodeToUse = tempNode;
+			break;
+		}
+		nodes.remove(nodeToUse);
+		return nodeToUse;
 	}
 
 	/**
