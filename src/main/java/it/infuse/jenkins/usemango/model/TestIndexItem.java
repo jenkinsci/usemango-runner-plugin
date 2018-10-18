@@ -16,7 +16,7 @@ public class TestIndexItem extends GenericJson {
 	@Key("Assignee")
 	private String assignee;
 	@Key("LastModified")
-	private String lastModified;
+	private String lastModified; 
 	
 	/**
 	 * @return the id

@@ -22,15 +22,13 @@ import it.infuse.jenkins.usemango.model.TestIndexItem;
 
 public class UseMangoTestTask extends AbstractQueueTask implements AccessControlled {
 
-	private final Node node;
 	private final AbstractBuild<?,?> build;
 	private final BuildListener listener;
 	private final TestIndexItem item;
 	private final String command;
 
-    public UseMangoTestTask(Node node, AbstractBuild<?,?> build, BuildListener listener, 
+    public UseMangoTestTask(AbstractBuild<?,?> build, BuildListener listener, 
     		TestIndexItem item, String command) {
-    	this.node = node;
     	this.build = build;
         this.listener = listener;
         this.item = item;
@@ -38,7 +36,7 @@ public class UseMangoTestTask extends AbstractQueueTask implements AccessControl
     }
 
     public String getName() {
-        return "test_for_"+build.getParent().getName();
+        return "part_of_"+build.getParent().getName()+" #"+build.number;
     }
 
     public String getFullDisplayName() {
@@ -46,7 +44,7 @@ public class UseMangoTestTask extends AbstractQueueTask implements AccessControl
     }
 
     public String getUrl() {
-        return "";
+        return build.getUrl();
     }
 
     public String getDisplayName() {
@@ -60,12 +58,12 @@ public class UseMangoTestTask extends AbstractQueueTask implements AccessControl
 
     @Override
     public Node getLastBuiltOn() {
-        return node;
+        return build.getParent().getLastBuiltOn();
     }
 
     @Override
     public long getEstimatedDuration() {
-        return -1;
+        return build.getEstimatedDuration();
     }
 
 	@Override
@@ -116,6 +114,6 @@ public class UseMangoTestTask extends AbstractQueueTask implements AccessControl
 	}
 	
     public Executable createExecutable() throws IOException {
-        return new UseMangoTestExecutor(node, this, build.getWorkspace(), listener, item, command);
+    	return new UseMangoTestExecutor(this, build.getWorkspace(), listener, item, command);
     }
 }

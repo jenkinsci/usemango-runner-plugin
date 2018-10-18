@@ -5,6 +5,7 @@ import java.net.HttpCookie;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 import javax.servlet.ServletException;
 
@@ -20,23 +21,23 @@ import com.cloudbees.plugins.credentials.domains.DomainRequirement;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.Extension;
+import hudson.FilePath;
 import hudson.Launcher;
 import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
 import hudson.model.BuildListener;
-import hudson.model.Label;
-import hudson.model.Node;
 import hudson.security.ACL;
 import hudson.tasks.BuildStep;
 import hudson.tasks.BuildStepDescriptor;
 import hudson.tasks.Builder;
 import hudson.util.FormValidation;
-import it.infuse.jenkins.usemango.enums.UseMangoNodeLabel;
 import it.infuse.jenkins.usemango.exception.UseMangoException;
 import it.infuse.jenkins.usemango.model.TestIndexParams;
 import it.infuse.jenkins.usemango.model.TestIndexResponse;
 import it.infuse.jenkins.usemango.util.APIUtils;
+import it.infuse.jenkins.usemango.util.ProjectUtils;
 import jenkins.model.Jenkins;
 
 public class UseMangoBuilder extends Builder implements BuildStep {
@@ -59,9 +60,12 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 		this.assignedTo = assignedTo;
 	}
 	
+	@SuppressFBWarnings(value="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE")
 	@Override
 	public boolean perform(AbstractBuild<?,?> build, Launcher launcher, BuildListener listener) 
 			throws InterruptedException, IOException {
+		
+		prepareWorkspace(build.getWorkspace());
 		
 		Gson gson = new GsonBuilder().setPrettyPrinting().create();
 		TestIndexParams params = new TestIndexParams(); 
@@ -79,23 +83,18 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 			throw new RuntimeException(e);
 		}
 			
-		if(indexes != null && indexes.getItems() != null && indexes.getItems().size() > 0) {
+		if(Objects.requireNonNull(indexes).size() > 0) {
 		
-			listener.getLogger().println(indexes.getItems().size() + " tests retrieved:\n"+gson.toJson(indexes.getItems()));
+			build.getWorkspace().child(ProjectUtils.LOG_DIR).mkdirs();
+			build.getWorkspace().child(ProjectUtils.RESULTS_DIR).mkdirs();
 			
-			// Copy immutable Set to non-immutable List for processing
-			List<Node> nodes = new ArrayList<Node>(Label.get(UseMangoNodeLabel.USEMANGO.toString()).getNodes());
-			if(nodes == null || nodes.size() < 1) {
-				throw new RuntimeException("No 'usemango' nodes configured, unable to execute tests");
-			}
+			listener.getLogger().println(indexes.getItems().size() + " tests retrieved:\n"+gson.toJson(indexes.getItems()));
 			
 			List<String> testIds = new ArrayList<String>();
 			indexes.getItems().forEach((test) -> {
 				try {
 					testIds.add(test.getId());
-					Node node = getNode(nodes);
-					listener.getLogger().println("Allocating node '"+node.getNodeName()+"' to run test: "+test.getId());
-		            Jenkins.getInstance().getQueue().schedule2(new UseMangoTestTask(node, build, listener, test, 
+					Jenkins.getInstance().getQueue().schedule2(new UseMangoTestTask(build, listener, test, 
 		            		getUseMangoCommand(this.projectId, test.getName())), Jenkins.getInstance().getQuietPeriod());
 	            } catch(Exception e) {
 	            	listener.error("Error executing test: "+test.getName());
@@ -107,8 +106,8 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 			while(!testIds.isEmpty()) { // keep alive until all test tasks are done
 				testId = null;
 				for(String tempId : testIds) {
-					if(testIds != null && build != null && build.getWorkspace() != null &&  
-							build.getWorkspace().child(tempId).exists()) {
+					if(build.getWorkspace().child(ProjectUtils.LOG_DIR).
+							child(ProjectUtils.getLogFileName(tempId)).exists()) {
 						testId = tempId;
 					}
 				}
@@ -116,14 +115,12 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 				Thread.sleep(1000);
 			}
 			
-			listener.getLogger().println("\n\nTest execution complete.");
-			listener.getLogger().println("\nThanks for using useMango :-)\n");
+			listener.getLogger().println("\nTest execution complete.\n\nThank you for using useMango :-)\n");
 		
 		}
 		else {
 			listener.getLogger().println("No tests retrieved from useMango account, please check settings and try again.");
 		}
-		
 		return true;
 	}
 	
@@ -221,17 +218,15 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 		return sb.toString();
 	}
 	
-	private Node getNode(List<Node> nodes) {
-		Node nodeToUse = null;
-		if(nodes == null || nodes.isEmpty()) {
-			nodes = new ArrayList<Node>(Label.get(UseMangoNodeLabel.USEMANGO.toString()).getNodes());
+	private static void prepareWorkspace(FilePath workspace) throws IOException, InterruptedException {
+		if(workspace.child(ProjectUtils.LOG_DIR).exists()) {
+			workspace.child(ProjectUtils.LOG_DIR).deleteContents();
+			workspace.child(ProjectUtils.LOG_DIR).deleteRecursive();
 		}
-		for(Node tempNode : nodes) {
-			nodeToUse = tempNode;
-			break;
+		if(workspace.child(ProjectUtils.RESULTS_DIR).exists()) {
+			workspace.child(ProjectUtils.RESULTS_DIR).deleteContents();
+			workspace.child(ProjectUtils.RESULTS_DIR).deleteRecursive();
 		}
-		nodes.remove(nodeToUse);
-		return nodeToUse;
 	}
 
 	/**
