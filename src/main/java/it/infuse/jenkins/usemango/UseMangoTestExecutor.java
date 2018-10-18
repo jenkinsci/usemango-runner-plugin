@@ -81,8 +81,14 @@ public class UseMangoTestExecutor implements Executable {
 						write(out.toString(StandardCharsets.UTF_8.name()), StandardCharsets.UTF_8.name());
 					
 					// write outcome to listener (console)
-					if(exitCode == 0) listener.getLogger().println("PASS: Test '"+test.getName()+"' passed");
-		            else listener.getLogger().println("FAIL: Test '"+test.getName()+"' failed");
+					if(exitCode == 0) {
+						test.setPassed(true);
+						listener.getLogger().println("PASS: Test '"+test.getName()+"' passed");
+					}
+		            else {
+		            	test.setPassed(false);
+		            	listener.getLogger().println("FAIL: Test '"+test.getName()+"' failed");
+		            }
 					
 					// write result to workspace (junit xml)
 					String junit = IOUtils.toString(currentNode.getRootPath().

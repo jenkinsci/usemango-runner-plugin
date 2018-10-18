@@ -19,24 +19,25 @@ import hudson.security.AccessControlled;
 import hudson.security.Permission;
 import it.infuse.jenkins.usemango.enums.UseMangoNodeLabel;
 import it.infuse.jenkins.usemango.model.TestIndexItem;
+import it.infuse.jenkins.usemango.util.ProjectUtils;
 
 public class UseMangoTestTask extends AbstractQueueTask implements AccessControlled {
 
 	private final AbstractBuild<?,?> build;
 	private final BuildListener listener;
-	private final TestIndexItem item;
+	private final TestIndexItem test;
 	private final String command;
 
     public UseMangoTestTask(AbstractBuild<?,?> build, BuildListener listener, 
-    		TestIndexItem item, String command) {
+    		TestIndexItem test, String command) {
     	this.build = build;
         this.listener = listener;
-        this.item = item;
+        this.test = test;
         this.command = command;
     }
 
     public String getName() {
-        return "part_of_"+build.getParent().getName()+" #"+build.number;
+    	return ProjectUtils.getJenkinsTestTaskName(test.getName(), build.getParent().getName(), build.number);
     }
 
     public String getFullDisplayName() {
@@ -114,6 +115,6 @@ public class UseMangoTestTask extends AbstractQueueTask implements AccessControl
 	}
 	
     public Executable createExecutable() throws IOException {
-    	return new UseMangoTestExecutor(this, build.getWorkspace(), listener, item, command);
+    	return new UseMangoTestExecutor(this, build.getWorkspace(), listener, test, command);
     }
 }

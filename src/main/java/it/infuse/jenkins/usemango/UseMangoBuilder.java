@@ -28,12 +28,14 @@ import hudson.Launcher;
 import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
 import hudson.model.BuildListener;
+import hudson.model.Result;
 import hudson.security.ACL;
 import hudson.tasks.BuildStep;
 import hudson.tasks.BuildStepDescriptor;
 import hudson.tasks.Builder;
 import hudson.util.FormValidation;
 import it.infuse.jenkins.usemango.exception.UseMangoException;
+import it.infuse.jenkins.usemango.model.TestIndexItem;
 import it.infuse.jenkins.usemango.model.TestIndexParams;
 import it.infuse.jenkins.usemango.model.TestIndexResponse;
 import it.infuse.jenkins.usemango.util.APIUtils;
@@ -114,6 +116,13 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 				if(testId != null) testIds.remove(testId);
 				Thread.sleep(1000);
 			}
+			
+			boolean testSuitePassed = true;
+			for(TestIndexItem test : indexes.getItems()) {
+				if(!test.isPassed()) testSuitePassed = false;
+			}
+			
+			if(!testSuitePassed) build.setResult(Result.FAILURE); // set job to failure if a test failed
 			
 			listener.getLogger().println("\nTest execution complete.\n\nThank you for using useMango :-)\n");
 		

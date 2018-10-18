@@ -17,6 +17,7 @@ public class TestIndexItem extends GenericJson {
 	private String assignee;
 	@Key("LastModified")
 	private String lastModified; 
+	private boolean passed;
 	
 	/**
 	 * @return the id
@@ -53,6 +54,18 @@ public class TestIndexItem extends GenericJson {
 	 */
 	public String getLastModified() {
 		return lastModified;
+	}
+	/**
+	 * @return the passed
+	 */
+	public boolean isPassed() {
+		return passed;
+	}
+	/**
+	 * @param passed the passed to set
+	 */
+	public void setPassed(boolean passed) {
+		this.passed = passed;
 	}
 
 }
