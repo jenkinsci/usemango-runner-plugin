@@ -28,13 +28,16 @@ import hudson.Launcher;
 import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
 import hudson.model.BuildListener;
+import hudson.model.Label;
 import hudson.model.Result;
 import hudson.security.ACL;
 import hudson.tasks.BuildStep;
 import hudson.tasks.BuildStepDescriptor;
 import hudson.tasks.Builder;
 import hudson.util.FormValidation;
+import hudson.util.ListBoxModel;
 import it.infuse.jenkins.usemango.exception.UseMangoException;
+import it.infuse.jenkins.usemango.model.Project;
 import it.infuse.jenkins.usemango.model.TestIndexItem;
 import it.infuse.jenkins.usemango.model.TestIndexParams;
 import it.infuse.jenkins.usemango.model.TestIndexResponse;
@@ -47,6 +50,8 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	private static StandardUsernamePasswordCredentials credentials;
 	private static String useMangoUrl;
 	
+	private String useSlaveNodes;
+	private String nodeLabel;
 	private String projectId;
 	private String folderName;
 	private String testName;
@@ -54,7 +59,10 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	private String assignedTo;
 	
 	@DataBoundConstructor
-	public UseMangoBuilder(String projectId, String folderName, String testName, String testStatus, String assignedTo) {
+	public UseMangoBuilder(String useSlaveNodes, String nodeLabel, String projectId, String folderName, String testName, 
+			String testStatus, String assignedTo) {
+		this.useSlaveNodes = useSlaveNodes;
+		this.nodeLabel = nodeLabel;
 		this.projectId = projectId;
 		this.folderName = folderName;
 		this.testName = testName;
@@ -68,6 +76,18 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 			throws InterruptedException, IOException {
 		
 		prepareWorkspace(build.getWorkspace());
+		
+		boolean useSlaves = Boolean.valueOf(useSlaveNodes);
+		if(!useSlaves || StringUtils.isBlank(nodeLabel)) {
+			listener.getLogger().println("Not using labelled nodes, or no label defined.");
+			nodeLabel = "master"; // default to 'master'
+		}
+		Label label = Label.get(nodeLabel);
+		
+		if(label != null && label.getNodes() != null && label.getNodes().size() > 0) {
+			listener.getLogger().println("Executing tests on '"+nodeLabel+"' node(s)");
+		}
+		else throw new RuntimeException("No '"+nodeLabel+"' nodes available to run tests");
 		
 		Gson gson = new GsonBuilder().setPrettyPrinting().create();
 		TestIndexParams params = new TestIndexParams(); 
@@ -96,7 +116,7 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 			indexes.getItems().forEach((test) -> {
 				try {
 					testIds.add(test.getId());
-					Jenkins.getInstance().getQueue().schedule2(new UseMangoTestTask(build, listener, test, 
+					Jenkins.getInstance().getQueue().schedule2(new UseMangoTestTask(nodeLabel, build, listener, test, 
 		            		getUseMangoCommand(this.projectId, test.getName())), Jenkins.getInstance().getQuietPeriod());
 	            } catch(Exception e) {
 	            	listener.error("Error executing test: "+test.getName());
@@ -136,11 +156,56 @@ public class UseMangoBuilder extends Builder implements BuildStep {
     @Symbol("greet")
     @Extension
     public final static class DescriptorImpl extends BuildStepDescriptor<Builder> {
-
+    	
+    	public ListBoxModel doFillProjectIdItems() {
+    		ListBoxModel items = new ListBoxModel();
+    		items.add(""); // blank top option
+    		try {
+    			List<Project> projects = getProjects();
+    			if(projects != null) {
+    				projects.forEach(project->{
+    					items.add(project.getName());
+    				});
+    			}
+    		}
+    		catch(IOException | UseMangoException e) {
+    			e.printStackTrace(System.out);
+    		}
+    		return items;
+    	}
+        
+        public ListBoxModel doFillTestStatusItems() {
+    		ListBoxModel items = new ListBoxModel();
+    		items.add(""); // blank top option
+    		items.add("Design");
+    		items.add("Ready");
+    		items.add("Repair");
+    		items.add("Revalidate");
+    		items.add("Review");
+    		return items;
+    	}
+    	
+        public FormValidation doCheckNodeLabel(@QueryParameter String nodeLabel) 
+        		throws IOException, ServletException {
+        	
+        	if(StringUtils.isNotBlank(nodeLabel)) {
+        		Label label = Label.get(nodeLabel);
+        		if(label != null && label.getNodes() != null && label.getNodes().size() > 0) {
+        			return FormValidation.ok();
+        		}
+        		else return FormValidation.warning("No matching nodes found, please try again.");
+        	}
+        	else return FormValidation.ok();
+        }
+        
         public FormValidation doCheckProjectId(@QueryParameter String value)
                 throws IOException, ServletException {
-            if (value.length() == 0)
-                return FormValidation.error("Please set a Project ID");
+        	try {
+				loadUseMangoCredentials();
+			} catch (UseMangoException e) {
+				return FormValidation.errorWithMarkup(e.getMessage());
+			}
+            if (value.length() == 0) return FormValidation.error("Please set a Project ID");
             return FormValidation.ok();
         }
 
@@ -150,37 +215,47 @@ public class UseMangoBuilder extends Builder implements BuildStep {
     			@QueryParameter("testName") final String testName,
     	        @QueryParameter("testStatus") final String testStatus,
     	        @QueryParameter("assignedTo") final String assignedTo) throws IOException, ServletException {
-    		try {
-    			TestIndexParams params = new TestIndexParams(); 
-    			params.setAssignedTo(assignedTo);
-    			params.setFolderName(folderName);
-    			params.setProjectId(projectId);
-    			params.setTestName(testName);
-    			params.setTestStatus(testStatus);
-    			TestIndexResponse indexes = getTestIndexes(params);
-    			if(indexes != null && indexes.getItems() != null && !indexes.getItems().isEmpty()) {
-    				int size = indexes.getItems().size();
-    				
-    				StringBuilder resultsHtml = new StringBuilder("<div style=\"padding-top:5px;\">");
-    				resultsHtml.append("<table border=\"1\" cellspacing=\"0\" cellpadding=\"0\">");
-    				resultsHtml.append("<tr><th>Name</th><th>Folder</th><th>Status</th><th>Assigned To</th></tr>");
-    				indexes.getItems().forEach((item)->{
-    					resultsHtml.append("<tr><td>"+item.getName()+"</td><td>"+item.getFolder()+"</td><td>"+item.getStatus()+"</td><td>"+item.getAssignee()+"</td></tr>");
-    				});
-    				resultsHtml.append("</table>");
-    				resultsHtml.append("</div>");
-    				
-    				return FormValidation.okWithMarkup("Checking account... done.<br/>Validating settings... done.<br/><br/>"
-    						+"<b><font color=\"green\">Success, "+size+" test"+((size>1)?"s":"")+" found:</font></b><br/>"
-    						+resultsHtml);
-    			} 
-    			else {
-    				return FormValidation.warningWithMarkup("Checking account... done.<br/>Validating settings... done.<br/>"
-    						+"Warning, no tests found. Please check settings exist in account and try again.");
-    			}
-    		} catch (Exception e) {
-    	        return FormValidation.error("Validation error: "+e.getMessage());
-    	    }
+    		
+    		if(StringUtils.isBlank(projectId)) {
+    			return FormValidation.error("Please complete mandatory Project ID field above");
+    		}
+    		else {
+	    		try {
+	    			TestIndexParams params = new TestIndexParams(); 
+	    			params.setAssignedTo(assignedTo);
+	    			params.setFolderName(folderName);
+	    			params.setProjectId(projectId);
+	    			params.setTestName(testName);
+	    			params.setTestStatus(testStatus);
+	    			TestIndexResponse indexes = getTestIndexes(params);
+	    			
+	    			StringBuilder sb = new StringBuilder();
+    				sb.append("Connecting to <a href=\""+useMangoUrl+"\" target=\"_blank\">"+useMangoUrl+"</a>... done.<br/>");
+    				sb.append("Validating account "+credentials.getUsername()+"... done.<br/><br/>");
+	    			
+	    			if(indexes != null && indexes.getItems() != null && !indexes.getItems().isEmpty()) {
+	    				int size = indexes.getItems().size();
+	    				
+	    				StringBuilder resultsHtml = new StringBuilder("<div style=\"max-height:300px;overflow-y:scroll;padding-top:5px;\">");
+	    				resultsHtml.append("<table width=\"100%\" border=\"0\" cellspacing=\"6\" cellpadding=\"6\" style=\"border:1px solid rgba(0, 0, 0, 0.1);width:100%;background-color:#eee;\">");
+	    				resultsHtml.append("<tr style=\"background-color:rgba(0, 0, 0, 0.1);\" align=\"left\"><th>Name</th><th>Folder</th><th>Status</th><th>Assigned To</th></tr>");
+	    				indexes.getItems().forEach((item)->{
+	    					resultsHtml.append("<tr><td>"+item.getName()+"</td><td>"+item.getFolder()+"</td><td>"+item.getStatus()+"</td><td>"+item.getAssignee()+"</td></tr>");
+	    				});
+	    				resultsHtml.append("</table>");
+	    				resultsHtml.append("</div>");
+	    				
+	    				sb.append("<b>Test"+((size>1)?"s":"")+" matched in account ("+size+"):</b><br/>");
+	    				
+	    				return FormValidation.okWithMarkup(sb.toString()+resultsHtml);
+	    			} 
+	    			else {
+	    				return FormValidation.warningWithMarkup(sb.toString()+"No tests matched in account. Please check settings above and try again.");
+	    			}
+	    		} catch (UseMangoException e) {
+	    	        return FormValidation.error("Validation error: "+e.getMessage());
+	    	    }
+    		}
     	}
     	
         @SuppressWarnings("rawtypes")
@@ -193,7 +268,6 @@ public class UseMangoBuilder extends Builder implements BuildStep {
         public String getDisplayName() {
             return "Run useMango tests";
         }
-
     }
 	
 	private static StandardUsernamePasswordCredentials getCredentials(String credentialsId) {
@@ -204,17 +278,25 @@ public class UseMangoBuilder extends Builder implements BuildStep {
                 CredentialsMatchers.allOf(CredentialsMatchers.withId(credentialsId)));
 	}
 	
-	private static TestIndexResponse getTestIndexes(TestIndexParams params) throws IOException, UseMangoException {
+	private static void loadUseMangoCredentials() throws UseMangoException {
 		useMangoUrl = UseMangoConfiguration.get().getLocation();
 		credentials = getCredentials(UseMangoConfiguration.get().getCredentialsId());
 		
 		if(StringUtils.isBlank(useMangoUrl) || !useMangoUrl.startsWith("http")) 
-			throw new UseMangoException("Invalid useMango url in global configuration");
+			throw new UseMangoException("Invalid useMango url in global configuration (<a href=\"/configure\">view config</a>)");
 		if(credentials == null) 
-			throw new UseMangoException("Invalid useMango credentials in global configuration");
-		
+			throw new UseMangoException("Invalid useMango credentials in global configuration (<a href=\"/configure\">view config</a>)");
+	}
+	
+	private static TestIndexResponse getTestIndexes(TestIndexParams params) throws IOException, UseMangoException {
 		HttpCookie cookie = APIUtils.getSessionCookie(useMangoUrl, credentials.getUsername(), credentials.getPassword().getPlainText());
 		return APIUtils.getTestIndex(useMangoUrl, params, cookie);
+	}
+	
+	private static List<Project> getProjects() throws IOException, UseMangoException {
+		loadUseMangoCredentials();
+		HttpCookie authCookie = APIUtils.getSessionCookie(useMangoUrl, credentials.getUsername(), credentials.getPassword().getPlainText());
+		return APIUtils.getProjects(useMangoUrl, authCookie);
 	}
 	
 	private static String getUseMangoCommand(String projectId, String testName) {
@@ -272,4 +354,19 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	public String getAssignedTo() {
 		return assignedTo;
 	}
+
+	/**
+	 * @return the nodeLabel
+	 */
+	public String getNodeLabel() {
+		return nodeLabel;
+	}
+
+	/**
+	 * @return the useSlaveNodes
+	 */
+	public String getUseSlaveNodes() {
+		return useSlaveNodes;
+	}
+	
 }

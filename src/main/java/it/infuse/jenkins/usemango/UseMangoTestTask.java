@@ -17,23 +17,24 @@ import hudson.model.queue.SubTask;
 import hudson.security.ACL;
 import hudson.security.AccessControlled;
 import hudson.security.Permission;
-import it.infuse.jenkins.usemango.enums.UseMangoNodeLabel;
 import it.infuse.jenkins.usemango.model.TestIndexItem;
 import it.infuse.jenkins.usemango.util.ProjectUtils;
 
 public class UseMangoTestTask extends AbstractQueueTask implements AccessControlled {
 
+	private final String nodeLabel;
 	private final AbstractBuild<?,?> build;
 	private final BuildListener listener;
 	private final TestIndexItem test;
 	private final String command;
 
-    public UseMangoTestTask(AbstractBuild<?,?> build, BuildListener listener, 
+    public UseMangoTestTask(String nodeLabel, AbstractBuild<?,?> build, BuildListener listener, 
     		TestIndexItem test, String command) {
     	this.build = build;
         this.listener = listener;
         this.test = test;
         this.command = command;
+        this.nodeLabel = nodeLabel;
     }
 
     public String getName() {
@@ -54,7 +55,7 @@ public class UseMangoTestTask extends AbstractQueueTask implements AccessControl
 
     @Override
     public Label getAssignedLabel() {
-        return Label.get(UseMangoNodeLabel.USEMANGO.toString());
+        return Label.get(this.nodeLabel);
     }
 
     @Override

@@ -4,8 +4,14 @@
 	xmlns:j="jelly:core" 
 	xmlns:f="/lib/form"
 	xmlns:st="jelly:stapler">
-	<f:entry field="projectId" title="Project ID">
+	
+	<f:optionalBlock field="useSlaveNodes" inline="true" title="Execute tests on labelled nodes">
+      <f:entry field="nodeLabel" title="Label Expression">
         <f:textbox/>
+      </f:entry>
+    </f:optionalBlock>
+	<f:entry field="projectId" title="Project ID">
+        <f:select/>
     </f:entry>
 	<f:entry field="folderName" title="Folder name">
         <f:textbox/>
@@ -14,7 +20,7 @@
         <f:textbox/>
     </f:entry>
     <f:entry field="testStatus" title="Test status">
-        <f:textbox/>
+		<f:select/>
     </f:entry>
     <f:entry field="assignedTo" title="Assigned to">
         <f:textbox/>

@@ -77,8 +77,7 @@ public class UseMangoTestExecutor implements Executable {
 					int exitCode = launcher.launch(starter).join();
 					
 					// write byte stream to workspace (log)
-					workspace.child(ProjectUtils.LOG_DIR).child(ProjectUtils.getLogFileName(test.getId())).
-						write(out.toString(StandardCharsets.UTF_8.name()), StandardCharsets.UTF_8.name());
+					ProjectUtils.createLogFile(workspace, test.getId(), out.toString(StandardCharsets.UTF_8.name()), listener);
 					
 					// write outcome to listener (console)
 					if(exitCode == 0) {
@@ -90,7 +89,7 @@ public class UseMangoTestExecutor implements Executable {
 		            	listener.getLogger().println("FAIL: Test '"+test.getName()+"' failed");
 		            }
 					
-					// write result to workspace (junit xml)
+					// write result to workspace (junit)
 					String junit = IOUtils.toString(currentNode.getRootPath().
 							child("..\\programdata\\usemango\\logs\\junit.xml").read(), StandardCharsets.UTF_8.name());
 					
@@ -101,13 +100,9 @@ public class UseMangoTestExecutor implements Executable {
 					
 				} catch (IOException | InterruptedException e) {
 					if (workspace != null) {
-						try {
-							workspace.child(test.getId()).write(e.getMessage(), StandardCharsets.UTF_8.name());
-						} catch (IOException | InterruptedException e1) {
-							listener.error("Error writing test result to workspace: "+e1.getMessage());
-						}
+						ProjectUtils.createLogFile(workspace, test.getId(), e.getMessage(), listener);
 					}
-					throw new RuntimeException(e);
+					listener.error(e.getMessage());
 				}
 		    	finally {
 					try {
@@ -118,11 +113,17 @@ public class UseMangoTestExecutor implements Executable {
 		    	}
 	    	}
 	    	else {
-	    		listener.error("Error executing task for test '"+test.getName()+"', node does not have Windows OS.");
+	    		test.setPassed(false);
+	    		String failureMessage = "Failed to execute test: Node '"+currentNode.getDisplayName()+"' does not have Windows OS.";
+	    		ProjectUtils.createLogFile(workspace, test.getId(), failureMessage, listener);
+	    		listener.error(failureMessage);
 	    	}
     	}
     	else {
-    		listener.error("Error executing task for test '"+test.getName()+"', node is null.");
+    		test.setPassed(false);
+    		String failureMessage = "Failed to execute test: Node is null.";
+    		ProjectUtils.createLogFile(workspace, test.getId(), failureMessage, listener);
+    		listener.error(failureMessage);
     	}
     }
 

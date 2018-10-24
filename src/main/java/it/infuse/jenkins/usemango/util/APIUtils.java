@@ -2,6 +2,7 @@ package it.infuse.jenkins.usemango.util;
 
 import java.io.IOException;
 import java.net.HttpCookie;
+import java.util.ArrayList;
 import java.util.List;
 
 import com.google.api.client.http.GenericUrl;
@@ -18,8 +19,10 @@ import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.client.util.GenericData;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.reflect.TypeToken;
 
 import it.infuse.jenkins.usemango.exception.UseMangoException;
+import it.infuse.jenkins.usemango.model.Project;
 import it.infuse.jenkins.usemango.model.TestIndexParams;
 import it.infuse.jenkins.usemango.model.TestIndexResponse;
 
@@ -29,6 +32,7 @@ public class APIUtils {
     static JsonFactory JSON_FACTORY = new JacksonFactory();
     
     final static String ENDPOINT_SESSION 	= "/v1.5/session";
+    final static String ENDPOINT_PROJECTS 	= "/v1.5/projects";
     final static String ENDPOINT_TESTINDEX 	= "/v1.5/projects/%s/testindex";
     
 	public static HttpCookie getSessionCookie(String useMangoUrl, String email, String password) throws UseMangoException, IOException {
@@ -64,7 +68,6 @@ public class APIUtils {
 			url.set("status", params.getTestStatus());
 			url.set("assignee", params.getAssignedTo());
 			if(isAnotherPage(response)) url.set("cursor", response.getInfo().getNext());
-			System.out.println(url);
 			HttpRequest request = requestFactory.buildGetRequest(url);
 			HttpHeaders headers = new HttpHeaders();
 			headers.setCookie(authCookie.toString());
@@ -81,6 +84,20 @@ public class APIUtils {
 			if(!response.getInfo().isHasNext()) break; // exit when no more pages
 		}
 		return response;
+	}
+	
+	@SuppressWarnings("unchecked")
+	public static List<Project> getProjects(String useMangoUrl, HttpCookie authCookie) throws IOException {
+		HttpRequestFactory requestFactory = HTTP_TRANSPORT.createRequestFactory(
+				(HttpRequest request) -> {request.setParser(new JsonObjectParser(JSON_FACTORY));
+        });
+		GenericUrl url = new GenericUrl(useMangoUrl);
+		url.setRawPath(String.format(ENDPOINT_PROJECTS));
+		HttpRequest request = requestFactory.buildGetRequest(url);
+		HttpHeaders headers = new HttpHeaders();
+		headers.setCookie(authCookie.toString());
+		request.setHeaders(headers);
+		return (ArrayList<Project>)request.execute().parseAs(new TypeToken<ArrayList<Project>>(){}.getType());
 	}
 	
 	private static boolean isAnotherPage(TestIndexResponse response) {

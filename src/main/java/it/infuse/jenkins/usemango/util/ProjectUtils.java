@@ -1,6 +1,12 @@
 package it.infuse.jenkins.usemango.util;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+
 import org.apache.commons.lang3.StringUtils;
+
+import hudson.FilePath;
+import hudson.model.BuildListener;
 
 public class ProjectUtils {
 
@@ -22,12 +28,22 @@ public class ProjectUtils {
 	public static String formatTestName(String testName) {
 		if(StringUtils.isNoneBlank(testName)) {
 			testName = testName.trim().toLowerCase();
-			if(testName.length() > 15) {
-				return (testName.substring(0, 15)+"...").toLowerCase();
+			if(testName.length() > 12) {
+				return (testName.substring(0, 12)+"...").toLowerCase();
 			}
 			else return testName.toLowerCase();
 		}
 		else return null;
+	}
+	
+	public static void createLogFile(FilePath workspace, String testId, String logMessage, BuildListener listener) {
+		try {
+			workspace.child(ProjectUtils.LOG_DIR).child(ProjectUtils.getLogFileName(testId)).
+				write(logMessage, StandardCharsets.UTF_8.name());
+		} catch (IOException | InterruptedException e) {
+			listener.error("Error writing test log to workspace: "+e.getMessage());
+			e.printStackTrace(listener.getLogger());
+		}
 	}
 	
 }
