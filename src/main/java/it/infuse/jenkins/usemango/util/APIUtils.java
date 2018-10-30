@@ -5,6 +5,8 @@ import java.net.HttpCookie;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.http.HttpStatus;
+
 import com.google.api.client.http.GenericUrl;
 import com.google.api.client.http.HttpHeaders;
 import com.google.api.client.http.HttpRequest;
@@ -17,8 +19,6 @@ import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.JsonObjectParser;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.client.util.GenericData;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 
 import it.infuse.jenkins.usemango.exception.UseMangoException;
@@ -46,12 +46,21 @@ public class APIUtils {
 		JsonHttpContent httpContent = new JsonHttpContent(new JacksonFactory(), data);
 		HttpRequest request = requestFactory.buildPostRequest(url, httpContent);
 		HttpResponse response = request.execute();
-		List<HttpCookie> cookies = HttpCookie.parse(response.getHeaders().getFirstHeaderStringValue("Set-Cookie"));
-		return cookies
-				.stream()
-				.filter(c -> c.getName().contains("Identity"))
-				.findFirst()
-				.orElseThrow(() -> new UseMangoException("Auth cookie not found in /session response"));
+		if(response != null) {
+			if(response.getStatusCode() == HttpStatus.SC_OK) {
+				List<HttpCookie> cookies = HttpCookie.parse(response.getHeaders().getFirstHeaderStringValue("Set-Cookie"));
+				if(cookies != null && cookies.size() > 0) {
+					return cookies
+						.stream()
+						.filter(c -> c.getName().contains("Identity"))
+						.findFirst()
+						.orElseThrow(() -> new UseMangoException("Auth cookie not found in /session response"));
+				}
+				else throw new UseMangoException("No cookies returned from "+useMangoUrl+ENDPOINT_SESSION);
+			}
+			else throw new UseMangoException("Invalid response from "+useMangoUrl+ENDPOINT_SESSION+" - status code: "+response.getStatusCode());
+		}
+		else throw new UseMangoException("Error retrieving cookie from "+useMangoUrl+ENDPOINT_SESSION+" - response is null");
 	}
 	
 	public static TestIndexResponse getTestIndex(String useMangoUrl, TestIndexParams params, HttpCookie authCookie) throws IOException {
@@ -108,25 +117,25 @@ public class APIUtils {
 	}
 	
 	// testing
-	public static void main(String[] args) {
-		try {
-			String username = "ian.bisset@infuse.it";
-			String password = "usemangouser";
-			String umUrl = "https://qa.usemango.co.uk";
-			HttpCookie cookie = getSessionCookie(umUrl, username, password);
-			TestIndexParams params = new TestIndexParams();
-			params.setAssignedTo("");
-			params.setFolderName("useMango");
-			params.setProjectId("Ian");
-			params.setTestName("");
-			params.setTestStatus("");
-			TestIndexResponse response = getTestIndex(umUrl, params, cookie);
-			Gson gson = new GsonBuilder().setPrettyPrinting().create();
-			System.out.println(gson.toJson(response));
-			System.out.println("Items: "+response.getItems().size());
-		} catch(Exception e) {
-			e.printStackTrace();
-		}
-	}
+//	public static void main(String[] args) {
+//		try {
+//			String username = "ian.bisset@infuse.it";
+//			String password = "usemangouser";
+//			String umUrl = "https://qa.usemango.co.uk";
+//			HttpCookie cookie = getSessionCookie(umUrl, username, password);
+//			TestIndexParams params = new TestIndexParams();
+//			params.setAssignedTo("");
+//			params.setFolderName("useMango");
+//			params.setProjectId("Ian");
+//			params.setTestName("");
+//			params.setTestStatus("");
+//			TestIndexResponse response = getTestIndex(umUrl, params, cookie);
+//			Gson gson = new GsonBuilder().setPrettyPrinting().create();
+//			System.out.println(gson.toJson(response));
+//			System.out.println("Items: "+response.getItems().size());
+//		} catch(Exception e) {
+//			e.printStackTrace();
+//		}
+//	}
 	
 }

@@ -60,7 +60,7 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	
 	@DataBoundConstructor
 	public UseMangoBuilder(String useSlaveNodes, String nodeLabel, String projectId, String folderName, String testName, 
-			String testStatus, String assignedTo) {
+			String testStatus, String assignedTo) throws UseMangoException {
 		this.useSlaveNodes = useSlaveNodes;
 		this.nodeLabel = nodeLabel;
 		this.projectId = projectId;
@@ -76,6 +76,11 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 			throws InterruptedException, IOException {
 		
 		prepareWorkspace(build.getWorkspace());
+		try {
+			loadUseMangoCredentials();
+		} catch (UseMangoException e) {
+			throw new RuntimeException(e.getMessage());
+		}
 		
 		boolean useSlaves = Boolean.valueOf(useSlaveNodes);
 		if(!useSlaves || StringUtils.isBlank(nodeLabel)) {
@@ -200,11 +205,6 @@ public class UseMangoBuilder extends Builder implements BuildStep {
         
         public FormValidation doCheckProjectId(@QueryParameter String value)
                 throws IOException, ServletException {
-        	try {
-				loadUseMangoCredentials();
-			} catch (UseMangoException e) {
-				return FormValidation.errorWithMarkup(e.getMessage());
-			}
             if (value.length() == 0) return FormValidation.error("Please set a Project ID");
             return FormValidation.ok();
         }
@@ -289,7 +289,11 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	}
 	
 	private static TestIndexResponse getTestIndexes(TestIndexParams params) throws IOException, UseMangoException {
+		loadUseMangoCredentials();
+		if(params == null) throw new UseMangoException("Test parameters are null, please check useMango build step in job");
+		if(credentials == null) throw new UseMangoException("Credentials are null, please check useMango global config");
 		HttpCookie cookie = APIUtils.getSessionCookie(useMangoUrl, credentials.getUsername(), credentials.getPassword().getPlainText());
+		if(cookie == null) throw new UseMangoException("Cookie is null, please check server "+useMangoUrl);
 		return APIUtils.getTestIndex(useMangoUrl, params, cookie);
 	}
 	
