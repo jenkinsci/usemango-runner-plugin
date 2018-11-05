@@ -8,10 +8,10 @@
         <relativePath />
     </parent>
     <groupId>it.infuse.jenkins</groupId>
-    <artifactId>usemango</artifactId>
-    <version>0.1</version>
+    <artifactId>usemango-runner</artifactId>
+    <version>1.0</version>
     <packaging>hpi</packaging>
-    <name>useMango</name>
+    <name>useMango Runner</name>
     <description>This plugin integrates useMango with Jenkins.</description>
     
     <properties>
@@ -30,7 +30,7 @@
     <!-- Appears on the wiki page: -->
     <developers>
       <developer>
-        <id>ianbisset</id>
+        <id>ian_bisset</id>
         <name>Ian Bisset</name>
         <email>ian.bisset@infuse.it</email>
       </developer>

@@ -60,7 +60,7 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	
 	@DataBoundConstructor
 	public UseMangoBuilder(String useSlaveNodes, String nodeLabel, String projectId, String folderName, String testName, 
-			String testStatus, String assignedTo) throws UseMangoException {
+			String testStatus, String assignedTo) {
 		this.useSlaveNodes = useSlaveNodes;
 		this.nodeLabel = nodeLabel;
 		this.projectId = projectId;
