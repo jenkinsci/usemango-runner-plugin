@@ -116,26 +116,4 @@ public class APIUtils {
 		else return false;
 	}
 	
-	// testing
-//	public static void main(String[] args) {
-//		try {
-//			String username = "ian.bisset@infuse.it";
-//			String password = "usemangouser";
-//			String umUrl = "https://qa.usemango.co.uk";
-//			HttpCookie cookie = getSessionCookie(umUrl, username, password);
-//			TestIndexParams params = new TestIndexParams();
-//			params.setAssignedTo("");
-//			params.setFolderName("useMango");
-//			params.setProjectId("Ian");
-//			params.setTestName("");
-//			params.setTestStatus("");
-//			TestIndexResponse response = getTestIndex(umUrl, params, cookie);
-//			Gson gson = new GsonBuilder().setPrettyPrinting().create();
-//			System.out.println(gson.toJson(response));
-//			System.out.println("Items: "+response.getItems().size());
-//		} catch(Exception e) {
-//			e.printStackTrace();
-//		}
-//	}
-	
 }

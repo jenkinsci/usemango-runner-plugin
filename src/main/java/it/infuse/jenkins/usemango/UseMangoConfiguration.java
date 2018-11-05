@@ -20,22 +20,17 @@ import com.cloudbees.plugins.credentials.common.StandardListBoxModel;
 import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials;
 import com.cloudbees.plugins.credentials.domains.DomainRequirement;
 
-/**
- * useMango global configuration.
- */
 @Extension
 public class UseMangoConfiguration extends GlobalConfiguration {
 
-    /** @return the singleton instance */
+	private String location;
+    private String credentialsId;
+	
     public static UseMangoConfiguration get() {
         return GlobalConfiguration.all().get(UseMangoConfiguration.class);
     }
 
-    private String location;
-    private String credentialsId;
-
     public UseMangoConfiguration() {
-        // When Jenkins is restarted, load any saved configuration from disk.
         load();
     }
 
