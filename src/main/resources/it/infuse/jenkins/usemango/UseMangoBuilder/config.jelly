@@ -7,11 +7,11 @@
 	
 	<f:optionalBlock field="useSlaveNodes" inline="true" title="Execute tests on labelled nodes">
       <f:entry field="nodeLabel" title="Label Expression">
-        <f:textbox/>
+        <f:textbox checkMethod="post"/>
       </f:entry>
     </f:optionalBlock>
 	<f:entry field="projectId" title="Project ID">
-        <f:select/>
+        <f:select checkMethod="post"/>
     </f:entry>
 	<f:entry field="folderName" title="Folder name">
         <f:textbox/>

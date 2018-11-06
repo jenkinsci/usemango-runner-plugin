@@ -13,6 +13,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.jenkinsci.Symbol;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.QueryParameter;
+import org.kohsuke.stapler.verb.POST;
 
 import com.cloudbees.plugins.credentials.CredentialsMatchers;
 import com.cloudbees.plugins.credentials.CredentialsProvider;
@@ -158,7 +159,7 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 		return true;
 	}
 	
-    @Symbol("greet")
+    @Symbol("useMango")
     @Extension
     public final static class DescriptorImpl extends BuildStepDescriptor<Builder> {
     	
@@ -190,6 +191,7 @@ public class UseMangoBuilder extends Builder implements BuildStep {
     		return items;
     	}
     	
+        @POST
         public FormValidation doCheckNodeLabel(@QueryParameter String nodeLabel) 
         		throws IOException, ServletException {
         	
@@ -203,6 +205,7 @@ public class UseMangoBuilder extends Builder implements BuildStep {
         	else return FormValidation.ok();
         }
         
+        @POST
         public FormValidation doCheckProjectId(@QueryParameter String value)
                 throws IOException, ServletException {
             if (value.length() == 0) return FormValidation.error("Please set a Project ID");
