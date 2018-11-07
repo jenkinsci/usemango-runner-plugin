@@ -31,6 +31,7 @@ import hudson.model.AbstractProject;
 import hudson.model.BuildListener;
 import hudson.model.Label;
 import hudson.model.Result;
+import hudson.model.User;
 import hudson.security.ACL;
 import hudson.tasks.BuildStep;
 import hudson.tasks.BuildStepDescriptor;
@@ -76,87 +77,95 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	public boolean perform(AbstractBuild<?,?> build, Launcher launcher, BuildListener listener) 
 			throws InterruptedException, IOException {
 		
-		prepareWorkspace(build.getWorkspace());
-		try {
-			loadUseMangoCredentials();
-		} catch (UseMangoException e) {
-			throw new RuntimeException(e.getMessage());
-		}
-		
-		boolean useSlaves = Boolean.valueOf(useSlaveNodes);
-		if(!useSlaves || StringUtils.isBlank(nodeLabel)) {
-			listener.getLogger().println("Not using labelled nodes, or no label defined.");
-			nodeLabel = "master"; // default to 'master'
-		}
-		Label label = Label.get(nodeLabel);
-		
-		if(label != null && label.getNodes() != null && label.getNodes().size() > 0) {
-			listener.getLogger().println("Executing tests on '"+nodeLabel+"' node(s)");
-		}
-		else throw new RuntimeException("No '"+nodeLabel+"' nodes available to run tests");
-		
-		Gson gson = new GsonBuilder().setPrettyPrinting().create();
-		TestIndexParams params = new TestIndexParams(); 
-		params.setAssignedTo(this.assignedTo);
-		params.setFolderName(this.folderName);
-		params.setProjectId(this.projectId);
-		params.setTestName(this.testName);
-		params.setTestStatus(this.testStatus);
-		listener.getLogger().println("TestIndex API parameters:\n"+gson.toJson(params));
-		
-		TestIndexResponse indexes = null;
-		try {
-			indexes = getTestIndexes(params);
-		} catch (UseMangoException e) {
-			throw new RuntimeException(e);
-		}
+		if(ProjectUtils.hasCorrectPermissions(User.current())) { // check user allowed to build this job
 			
-		if(Objects.requireNonNull(indexes).size() > 0) {
-		
-			build.getWorkspace().child(ProjectUtils.LOG_DIR).mkdirs();
-			build.getWorkspace().child(ProjectUtils.RESULTS_DIR).mkdirs();
+			prepareWorkspace(build.getWorkspace());
+			try {
+				loadUseMangoCredentials();
+			} catch (UseMangoException e) {
+				throw new RuntimeException(e.getMessage());
+			}
 			
-			listener.getLogger().println(indexes.getItems().size() + " tests retrieved:\n"+gson.toJson(indexes.getItems()));
+			boolean useSlaves = Boolean.valueOf(useSlaveNodes);
+			if(!useSlaves || StringUtils.isBlank(nodeLabel)) {
+				listener.getLogger().println("Not using labelled nodes, or no label defined.");
+				nodeLabel = "master"; // default to 'master'
+			}
+			Label label = Label.get(nodeLabel);
 			
-			List<String> testIds = new ArrayList<String>();
-			indexes.getItems().forEach((test) -> {
-				try {
-					testIds.add(test.getId());
-					Jenkins.getInstance().getQueue().schedule2(new UseMangoTestTask(nodeLabel, build, listener, test, 
-		            		getUseMangoCommand(this.projectId, test.getName())), Jenkins.getInstance().getQuietPeriod());
-	            } catch(Exception e) {
-	            	listener.error("Error executing test: "+test.getName());
-	            	throw new RuntimeException(e);
-	            }
-			});
+			if(label != null && label.getNodes() != null && label.getNodes().size() > 0) {
+				listener.getLogger().println("Executing tests on '"+nodeLabel+"' node(s)");
+			}
+			else throw new RuntimeException("No '"+nodeLabel+"' nodes available to run tests");
 			
-			String testId;
-			while(!testIds.isEmpty()) { // keep alive until all test tasks are done
-				testId = null;
-				for(String tempId : testIds) {
-					if(build.getWorkspace().child(ProjectUtils.LOG_DIR).
-							child(ProjectUtils.getLogFileName(tempId)).exists()) {
-						testId = tempId;
+			Gson gson = new GsonBuilder().setPrettyPrinting().create();
+			TestIndexParams params = new TestIndexParams(); 
+			params.setAssignedTo(this.assignedTo);
+			params.setFolderName(this.folderName);
+			params.setProjectId(this.projectId);
+			params.setTestName(this.testName);
+			params.setTestStatus(this.testStatus);
+			listener.getLogger().println("TestIndex API parameters:\n"+gson.toJson(params));
+			
+			TestIndexResponse indexes = null;
+			try {
+				indexes = getTestIndexes(params);
+			} catch (UseMangoException e) {
+				throw new RuntimeException(e);
+			}
+				
+			if(Objects.requireNonNull(indexes).size() > 0) {
+			
+				build.getWorkspace().child(ProjectUtils.LOG_DIR).mkdirs();
+				build.getWorkspace().child(ProjectUtils.RESULTS_DIR).mkdirs();
+				
+				listener.getLogger().println(indexes.getItems().size() + " tests retrieved:\n"+gson.toJson(indexes.getItems()));
+				
+				List<String> testIds = new ArrayList<String>();
+				indexes.getItems().forEach((test) -> {
+					try {
+						testIds.add(test.getId());
+						Jenkins.getInstance().getQueue().schedule2(new UseMangoTestTask(nodeLabel, build, listener, test, 
+			            		getUseMangoCommand(this.projectId, test.getName())), Jenkins.getInstance().getQuietPeriod());
+		            } catch(Exception e) {
+		            	listener.error("Error executing test: "+test.getName());
+		            	throw new RuntimeException(e);
+		            }
+				});
+				
+				String testId;
+				while(!testIds.isEmpty()) { // keep alive until all test tasks are done
+					testId = null;
+					for(String tempId : testIds) {
+						if(build.getWorkspace().child(ProjectUtils.LOG_DIR).
+								child(ProjectUtils.getLogFileName(tempId)).exists()) {
+							testId = tempId;
+						}
 					}
+					if(testId != null) testIds.remove(testId);
+					Thread.sleep(1000);
 				}
-				if(testId != null) testIds.remove(testId);
-				Thread.sleep(1000);
+				
+				boolean testSuitePassed = true;
+				for(TestIndexItem test : indexes.getItems()) {
+					if(!test.isPassed()) testSuitePassed = false;
+				}
+				
+				if(!testSuitePassed) build.setResult(Result.FAILURE); // set job to failure if a test failed
+				
+				listener.getLogger().println("\nTest execution complete.\n\nThank you for using useMango :-)\n");
+			
 			}
-			
-			boolean testSuitePassed = true;
-			for(TestIndexItem test : indexes.getItems()) {
-				if(!test.isPassed()) testSuitePassed = false;
+			else {
+				listener.getLogger().println("No tests retrieved from useMango account, please check settings and try again.");
 			}
+			return true;
 			
-			if(!testSuitePassed) build.setResult(Result.FAILURE); // set job to failure if a test failed
-			
-			listener.getLogger().println("\nTest execution complete.\n\nThank you for using useMango :-)\n");
-		
 		}
 		else {
-			listener.getLogger().println("No tests retrieved from useMango account, please check settings and try again.");
+			listener.error("Jenkins user '"+User.current()+"' does not have permissions to configure and build this Job - please contact your system administrator, or update the users' security settings.");
+			return false;
 		}
-		return true;
 	}
 	
     @Symbol("useMango")
@@ -219,7 +228,10 @@ public class UseMangoBuilder extends Builder implements BuildStep {
     	        @QueryParameter("testStatus") final String testStatus,
     	        @QueryParameter("assignedTo") final String assignedTo) throws IOException, ServletException {
     		
-    		if(StringUtils.isBlank(projectId)) {
+    		if(!ProjectUtils.hasCorrectPermissions(User.current())) {
+    			return FormValidation.error("Jenkins user '"+User.current()+"' does not have permissions to configure and build this Job - please contact your system administrator, or update the users' security settings.");
+    		}
+    		else if(StringUtils.isBlank(projectId)) {
     			return FormValidation.error("Please complete mandatory Project ID field above");
     		}
     		else {

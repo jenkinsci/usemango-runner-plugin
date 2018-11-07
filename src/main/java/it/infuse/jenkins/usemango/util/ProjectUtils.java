@@ -7,6 +7,8 @@ import org.apache.commons.lang3.StringUtils;
 
 import hudson.FilePath;
 import hudson.model.BuildListener;
+import hudson.model.Job;
+import hudson.model.User;
 
 public class ProjectUtils {
 
@@ -44,6 +46,13 @@ public class ProjectUtils {
 			listener.error("Error writing test log to workspace: "+e.getMessage());
 			e.printStackTrace(listener.getLogger());
 		}
+	}
+	
+	public static boolean hasCorrectPermissions(User user) {
+		if(user != null && user.hasPermission(Job.CONFIGURE) && user.hasPermission(Job.BUILD)) {
+			return true;
+		}
+		else return false;
 	}
 	
 }
