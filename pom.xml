@@ -9,7 +9,7 @@
     </parent>
     <groupId>it.infuse.jenkins</groupId>
     <artifactId>usemango-runner</artifactId>
-    <version>1.0</version>
+    <version>1.0-SNAPSHOT</version>
     <packaging>hpi</packaging>
     <name>useMango Runner</name>
     <description>This plugin integrates useMango with Jenkins.</description>
