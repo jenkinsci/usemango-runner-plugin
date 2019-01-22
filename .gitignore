@@ -4,6 +4,7 @@ work
 # IntelliJ folders
 .idea
 .settings
+usemango-runner.iml
 
 # Eclipse files
 .classpath

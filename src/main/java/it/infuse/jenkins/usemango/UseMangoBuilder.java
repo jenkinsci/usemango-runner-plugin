@@ -307,14 +307,14 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 		loadUseMangoCredentials();
 		if(params == null) throw new UseMangoException("Test parameters are null, please check useMango build step in job");
 		if(credentials == null) throw new UseMangoException("Credentials are null, please check useMango global config");
-		String idToken = APIUtils.getSessionCookie(useMangoUrl, credentials.getUsername(), credentials.getPassword().getPlainText());
-		return APIUtils.getTestIndex(useMangoUrl, params, idToken);
+		APIUtils.authenticate(useMangoUrl, credentials.getUsername(), credentials.getPassword().getPlainText());
+		return APIUtils.getTestIndex(useMangoUrl, params);
 	}
 	
 	private static List<Project> getProjects() throws IOException, UseMangoException {
 		loadUseMangoCredentials();
-		String idToken = APIUtils.getSessionCookie(useMangoUrl, credentials.getUsername(), credentials.getPassword().getPlainText());
-		return APIUtils.getProjects(useMangoUrl, idToken);
+		APIUtils.authenticate(useMangoUrl, credentials.getUsername(), credentials.getPassword().getPlainText());
+		return APIUtils.getProjects(useMangoUrl);
 	}
 	
 	private static String getUseMangoCommand(String projectId, String testName) {
