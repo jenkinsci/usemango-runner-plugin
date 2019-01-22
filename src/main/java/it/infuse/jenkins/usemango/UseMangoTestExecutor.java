@@ -89,9 +89,12 @@ public class UseMangoTestExecutor implements Executable {
 		            	listener.getLogger().println("FAIL: Test '"+test.getName()+"' failed");
 		            }
 					
+					// ALLUSERPROFILE returns C:\ProgramData
+					FilePath junitPath = new FilePath(currentNode.getChannel(), currentNode.toComputer().getEnvironment().get("ALLUSERSPROFILE"));
+
 					// write result to workspace (junit)
-					String junit = IOUtils.toString(currentNode.getRootPath().
-							child("..\\programdata\\usemango\\logs\\junit.xml").read(), StandardCharsets.UTF_8.name());
+					String junit = IOUtils.toString(junitPath
+							.child("\\useMango\\Logs\\junit.xml").read(), StandardCharsets.UTF_8.name());
 					
 					workspace.child(ProjectUtils.RESULTS_DIR).
 						child(ProjectUtils.getJUnitFileName(test.getId())).write(junit, StandardCharsets.UTF_8.name());

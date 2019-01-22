@@ -1,0 +1,10 @@
+target
+work
+
+# IntelliJ folders
+.idea
+.settings
+
+# Eclipse files
+.classpath
+.project
