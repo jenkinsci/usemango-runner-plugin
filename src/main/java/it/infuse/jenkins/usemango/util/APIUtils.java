@@ -35,10 +35,8 @@ public class APIUtils {
     final static String ENDPOINT_AUTHENTICATE 	= "/v1.5/authenticate";
     final static String ENDPOINT_PROJECTS 	= "/v1.5/projects";
     final static String ENDPOINT_TESTINDEX 	= "/v1.5/projects/%s/testindex";
-
-    private static String ID_TOKEN;
     
-	public static void authenticate(String useMangoUrl, String email, String password) throws UseMangoException, IOException {
+	public static String getAuthenticationToken(String useMangoUrl, String email, String password) throws UseMangoException, IOException {
 		HttpRequestFactory requestFactory = HTTP_TRANSPORT.createRequestFactory();
 		GenericUrl url = new GenericUrl(useMangoUrl);
 		url.setRawPath(ENDPOINT_AUTHENTICATE);
@@ -54,7 +52,7 @@ public class APIUtils {
 				JsonObject tokenJson = new JsonParser().parse(responseJson).getAsJsonObject();
 				String idToken = tokenJson.get("IdToken").getAsString();
 				if(idToken != null) {
-					ID_TOKEN = idToken;
+					return idToken;
 				}
 				else throw new UseMangoException("No Id token returned from "+useMangoUrl+ENDPOINT_AUTHENTICATE);
 			}
@@ -63,7 +61,7 @@ public class APIUtils {
 		else throw new UseMangoException("Error retrieving tokens from "+useMangoUrl+ENDPOINT_AUTHENTICATE+" - response is null");
 	}
 	
-	public static TestIndexResponse getTestIndex(String useMangoUrl, TestIndexParams params) throws IOException {
+	public static TestIndexResponse getTestIndex(String useMangoUrl, TestIndexParams params, String idToken) throws IOException {
 		HttpRequestFactory requestFactory = HTTP_TRANSPORT.createRequestFactory(
 				(HttpRequest request) -> {request.setParser(new JsonObjectParser(JSON_FACTORY));
         });
@@ -78,7 +76,7 @@ public class APIUtils {
 			url.set("assignee", params.getAssignedTo());
 			if(isAnotherPage(response)) url.set("cursor", response.getInfo().getNext());
 			HttpRequest request = requestFactory.buildGetRequest(url);
-			request.setHeaders(getHeadersForServer());
+			request.setHeaders(getHeadersForServer(idToken));
 			if(isAnotherPage(response)) {
 				TestIndexResponse tmpResponse = request.execute().parseAs(TestIndexResponse.class);
 				response.getItems().addAll(tmpResponse.getItems());
@@ -94,14 +92,14 @@ public class APIUtils {
 	}
 	
 	@SuppressWarnings("unchecked")
-	public static List<Project> getProjects(String useMangoUrl) throws IOException {
+	public static List<Project> getProjects(String useMangoUrl, String idToken) throws IOException {
 		HttpRequestFactory requestFactory = HTTP_TRANSPORT.createRequestFactory(
 				(HttpRequest request) -> {request.setParser(new JsonObjectParser(JSON_FACTORY));
         });
 		GenericUrl url = new GenericUrl(useMangoUrl);
 		url.setRawPath(String.format(ENDPOINT_PROJECTS));
 		HttpRequest request = requestFactory.buildGetRequest(url);
-		request.setHeaders(getHeadersForServer());
+		request.setHeaders(getHeadersForServer(idToken));
 		return (ArrayList<Project>)request.execute().parseAs(new TypeToken<ArrayList<Project>>(){}.getType());
 	}
 	
@@ -112,9 +110,9 @@ public class APIUtils {
 		else return false;
 	}
 
-	private static HttpHeaders getHeadersForServer(){
+	private static HttpHeaders getHeadersForServer(String idToken){
 		HttpHeaders headers = new HttpHeaders();
-		headers.setAuthorization("Bearer " + ID_TOKEN);
+		headers.setAuthorization("Bearer " + idToken);
 		return headers;
 	}
 	
