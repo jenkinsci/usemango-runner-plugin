@@ -31,12 +31,14 @@ public class APIUtils {
 
 	static HttpTransport HTTP_TRANSPORT = new NetHttpTransport();
     static JsonFactory JSON_FACTORY = new JacksonFactory();
+
+    final static String API_VERSION = "/v1.5";
+    final static String ENDPOINT_AUTHENTICATE 	= API_VERSION + "/authenticate";
+    final static String ENDPOINT_REFRESH_TOKEN = API_VERSION + "/authenticate/refresh";
+    final static String ENDPOINT_PROJECTS 	= API_VERSION + "/projects";
+    final static String ENDPOINT_TESTINDEX = API_VERSION + "/projects/%s/testindex";
     
-    final static String ENDPOINT_AUTHENTICATE 	= "/v1.5/authenticate";
-    final static String ENDPOINT_PROJECTS 	= "/v1.5/projects";
-    final static String ENDPOINT_TESTINDEX 	= "/v1.5/projects/%s/testindex";
-    
-	public static String getAuthenticationToken(String useMangoUrl, String email, String password) throws UseMangoException, IOException {
+	public static String[] getAuthenticationTokens(String useMangoUrl, String email, String password) throws UseMangoException, IOException {
 		HttpRequestFactory requestFactory = HTTP_TRANSPORT.createRequestFactory();
 		GenericUrl url = new GenericUrl(useMangoUrl);
 		url.setRawPath(ENDPOINT_AUTHENTICATE);
@@ -51,8 +53,12 @@ public class APIUtils {
 				String responseJson = response.parseAsString();
 				JsonObject tokenJson = new JsonParser().parse(responseJson).getAsJsonObject();
 				String idToken = tokenJson.get("IdToken").getAsString();
-				if(idToken != null) {
-					return idToken;
+                String refreshToken = tokenJson.get("RefreshToken").getAsString();
+				if(idToken != null && refreshToken != null) {
+					String[] tokens = new String[2];
+				    tokens[0] = idToken;
+				    tokens[1] = refreshToken;
+				    return tokens;
 				}
 				else throw new UseMangoException("No Id token returned from "+useMangoUrl+ENDPOINT_AUTHENTICATE);
 			}
@@ -60,7 +66,29 @@ public class APIUtils {
 		}
 		else throw new UseMangoException("Error retrieving tokens from "+useMangoUrl+ENDPOINT_AUTHENTICATE+" - response is null");
 	}
-	
+
+	public static String refreshIdToken(String useMangoUrl, String refreshToken) throws IOException, UseMangoException {
+        HttpRequestFactory requestFactory = HTTP_TRANSPORT.createRequestFactory();
+        GenericUrl url = new GenericUrl(useMangoUrl);
+        url.setRawPath(ENDPOINT_REFRESH_TOKEN);
+        JsonHttpContent httpContent = new JsonHttpContent(new JacksonFactory(), refreshToken);
+        HttpRequest request = requestFactory.buildPostRequest(url, httpContent);
+        HttpResponse response = request.execute();
+        if(response != null) {
+            if(response.getStatusCode() == HttpStatus.SC_OK) {
+                String responseJson = response.parseAsString();
+                JsonObject tokenJson = new JsonParser().parse(responseJson).getAsJsonObject();
+                String idToken = tokenJson.get("IdToken").getAsString();
+                if(idToken != null && refreshToken != null) {
+                    return idToken;
+                }
+                else throw new UseMangoException("No Id token returned from "+useMangoUrl+ENDPOINT_REFRESH_TOKEN);
+            }
+            else throw new UseMangoException("Invalid response from "+useMangoUrl+ENDPOINT_REFRESH_TOKEN+" - status code: "+response.getStatusCode());
+        }
+        else throw new UseMangoException("Error retrieving tokens from "+useMangoUrl+ENDPOINT_REFRESH_TOKEN+" - response is null");
+    }
+
 	public static TestIndexResponse getTestIndex(String useMangoUrl, TestIndexParams params, String idToken) throws IOException {
 		HttpRequestFactory requestFactory = HTTP_TRANSPORT.createRequestFactory(
 				(HttpRequest request) -> {request.setParser(new JsonObjectParser(JSON_FACTORY));

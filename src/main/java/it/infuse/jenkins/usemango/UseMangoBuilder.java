@@ -1,15 +1,15 @@
 package it.infuse.jenkins.usemango;
 
 import java.io.IOException;
-import java.net.HttpCookie;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Objects;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
 
 import javax.servlet.ServletException;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.codec.binary.Base64;
 import org.jenkinsci.Symbol;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.QueryParameter;
@@ -51,6 +51,8 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 
 	private static StandardUsernamePasswordCredentials credentials;
 	private static String useMangoUrl;
+	private static String ID_TOKEN = null;
+	private static String REFRESH_TOKEN = null;
 	
 	private String useSlaveNodes;
 	private String nodeLabel;
@@ -80,11 +82,6 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 		if(ProjectUtils.hasCorrectPermissions(User.current())) { // check user allowed to build this job
 			
 			prepareWorkspace(build.getWorkspace());
-			try {
-				loadUseMangoCredentials();
-			} catch (UseMangoException e) {
-				throw new RuntimeException(e.getMessage());
-			}
 			
 			boolean useSlaves = Boolean.valueOf(useSlaveNodes);
 			if(!useSlaves || StringUtils.isBlank(nodeLabel)) {
@@ -171,7 +168,7 @@ public class UseMangoBuilder extends Builder implements BuildStep {
     @Symbol("useMango")
     @Extension
     public final static class DescriptorImpl extends BuildStepDescriptor<Builder> {
-    	
+
     	public ListBoxModel doFillProjectIdItems() {
     		ListBoxModel items = new ListBoxModel();
     		items.add(""); // blank top option
@@ -302,22 +299,51 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 		if(credentials == null) 
 			throw new UseMangoException("Invalid useMango credentials in global configuration (<a href=\"/configure\">view config</a>)");
 	}
-	
+
+	private static void getTokens() throws UseMangoException, IOException {
+		loadUseMangoCredentials();
+		if(credentials == null) throw new UseMangoException("Credentials are null, please check useMango global config");
+		String[] tokens = APIUtils.getAuthenticationTokens(useMangoUrl, credentials.getUsername(), credentials.getPassword().getPlainText());
+		ID_TOKEN = tokens[0];
+		REFRESH_TOKEN = tokens[1];
+	}
+
+	private static void refreshIdToken() throws UseMangoException, IOException{
+		ID_TOKEN = APIUtils.refreshIdToken(useMangoUrl, REFRESH_TOKEN);
+	}
+
+	private static boolean isTokenExpired(){
+		String base64EncodedBody = ID_TOKEN.split("\\.")[1];
+		Base64 base64Url = new Base64(true);
+		String body = new String(base64Url.decode(base64EncodedBody), StandardCharsets.UTF_8);
+		JsonObject jsonBody = new JsonParser().parse(body).getAsJsonObject();
+		long expiry = jsonBody.get("exp").getAsLong();
+		Date expiring = new Date(expiry * 1000);
+		Date now = new Date();
+		return expiring.before(now);
+	}
+
+	private static void checkTokenExistsAndValid() throws UseMangoException, IOException {
+		if(ID_TOKEN == null){
+			getTokens();
+			return;
+		}
+		else if(isTokenExpired()){
+			refreshIdToken();
+		}
+	}
+
 	private static TestIndexResponse getTestIndexes(TestIndexParams params) throws IOException, UseMangoException {
+		checkTokenExistsAndValid();
 		if(params == null) throw new UseMangoException("Test parameters are null, please check useMango build step in job");
-		return APIUtils.getTestIndex(useMangoUrl, params, getAuthenticationToken());
+		return APIUtils.getTestIndex(useMangoUrl, params, ID_TOKEN);
 	}
 	
 	private static List<Project> getProjects() throws IOException, UseMangoException {
-		return APIUtils.getProjects(useMangoUrl, getAuthenticationToken());
+		checkTokenExistsAndValid();
+		return APIUtils.getProjects(useMangoUrl, ID_TOKEN);
 	}
 
-	private static String getAuthenticationToken() throws UseMangoException, IOException {
-		loadUseMangoCredentials();
-		if(credentials == null) throw new UseMangoException("Credentials are null, please check useMango global config");
-		return APIUtils.getAuthenticationToken(useMangoUrl, credentials.getUsername(), credentials.getPassword().getPlainText());
-	}
-	
 	private static String getUseMangoCommand(String projectId, String testName) {
 		StringBuffer sb = new StringBuffer("\"C:\\Program Files (x86)\\Infuse Consulting\\useMango\\App\\MangoMotor.exe\"");
 		sb.append(" -s \""+useMangoUrl+"\"");
