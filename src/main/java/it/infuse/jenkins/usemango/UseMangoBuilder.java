@@ -309,7 +309,16 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	}
 
 	private static void refreshIdToken() throws UseMangoException, IOException{
-		ID_TOKEN = APIUtils.refreshIdToken(useMangoUrl, REFRESH_TOKEN);
+		try{
+			ID_TOKEN = APIUtils.refreshIdToken(useMangoUrl, REFRESH_TOKEN);
+		} catch (UseMangoException e){
+			ID_TOKEN = null;
+			REFRESH_TOKEN = null;
+			// Only handling the expired refresh token exception here other exceptions thrown will be related to other issues
+			if (e.getMessage() == "Expired refresh token"){
+				getTokens();
+			}
+		}
 	}
 
 	private static boolean isTokenExpired(){

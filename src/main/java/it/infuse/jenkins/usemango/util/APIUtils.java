@@ -1,31 +1,24 @@
 package it.infuse.jenkins.usemango.util;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-
-import org.apache.http.HttpStatus;
-
-import com.google.api.client.http.GenericUrl;
-import com.google.api.client.http.HttpHeaders;
-import com.google.api.client.http.HttpRequest;
-import com.google.api.client.http.HttpRequestFactory;
-import com.google.api.client.http.HttpResponse;
-import com.google.api.client.http.HttpTransport;
+import com.google.api.client.http.*;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.http.json.JsonHttpContent;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.JsonObjectParser;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.client.util.GenericData;
-import com.google.gson.reflect.TypeToken;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-
+import com.google.gson.reflect.TypeToken;
 import it.infuse.jenkins.usemango.exception.UseMangoException;
 import it.infuse.jenkins.usemango.model.Project;
 import it.infuse.jenkins.usemango.model.TestIndexParams;
 import it.infuse.jenkins.usemango.model.TestIndexResponse;
+import org.apache.http.HttpStatus;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class APIUtils {
 
@@ -73,13 +66,20 @@ public class APIUtils {
         url.setRawPath(ENDPOINT_REFRESH_TOKEN);
         JsonHttpContent httpContent = new JsonHttpContent(new JacksonFactory(), refreshToken);
         HttpRequest request = requestFactory.buildPostRequest(url, httpContent);
-        HttpResponse response = request.execute();
+        HttpResponse response = null;
+        try {
+            response = request.execute();
+        } catch (HttpResponseException e){
+            if (e.getStatusCode() == 401 && e.getStatusMessage() == "Unauthorized"){
+                throw new UseMangoException("Expired refresh token");
+            }
+        }
         if(response != null) {
             if(response.getStatusCode() == HttpStatus.SC_OK) {
                 String responseJson = response.parseAsString();
                 JsonObject tokenJson = new JsonParser().parse(responseJson).getAsJsonObject();
                 String idToken = tokenJson.get("IdToken").getAsString();
-                if(idToken != null && refreshToken != null) {
+                if(idToken != null) {
                     return idToken;
                 }
                 else throw new UseMangoException("No Id token returned from "+useMangoUrl+ENDPOINT_REFRESH_TOKEN);
