@@ -357,9 +357,9 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 		StringBuffer sb = new StringBuffer("\"C:\\Program Files (x86)\\Infuse Consulting\\useMango\\App\\MangoMotor.exe\"");
 		sb.append(" -s \""+useMangoUrl+"\"");
 		sb.append(" -p \""+projectId+"\"");
-		sb.append(" -e \""+credentials.getUsername()+"\"");
-		sb.append(" -a \""+credentials.getPassword().getPlainText()+"\"");
 		sb.append(" --testname \""+testName+"\"");
+		sb.append(" -e \""+credentials.getUsername()+"\"");
+		sb.append(" --password \""+credentials.getPassword().getPlainText()+"\"");
 		return sb.toString();
 	}
 	

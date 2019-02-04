@@ -60,9 +60,13 @@ public class UseMangoTestExecutor implements Executable {
     		if(operatingSystem != null && operatingSystem.toLowerCase().contains("windows")) {
     		
 	    		listener.getLogger().println("START: Executing test '"+test.getName()+"' on Windows node "+currentNode.getNodeName());
-	    		
+
+	    		String[] parts = command.split(" --password ");
+	    		String cmd = parts[0].concat(" -a ");
+
 				ArgumentListBuilder args = new ArgumentListBuilder();
-				args.addTokenized(command);
+				args.addTokenized(cmd);
+				args.addMasked(parts[1]);
 	    	
 		    	Launcher launcher = currentNode.createLauncher(listener);
 		    	ProcStarter starter = launcher.new ProcStarter();
