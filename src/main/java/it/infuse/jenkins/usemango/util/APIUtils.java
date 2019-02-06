@@ -25,7 +25,7 @@ public class APIUtils {
 	static HttpTransport HTTP_TRANSPORT = new NetHttpTransport();
     static JsonFactory JSON_FACTORY = new JacksonFactory();
 
-    final static String API_VERSION = "/v1.5";
+    final static String API_VERSION = "/v2.0";
     final static String ENDPOINT_AUTHENTICATE 	= API_VERSION + "/authenticate";
     final static String ENDPOINT_REFRESH_TOKEN = API_VERSION + "/authenticate/refresh";
     final static String ENDPOINT_PROJECTS 	= API_VERSION + "/projects";
