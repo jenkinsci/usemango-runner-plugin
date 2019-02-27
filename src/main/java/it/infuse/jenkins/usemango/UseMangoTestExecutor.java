@@ -1,13 +1,9 @@
 package it.infuse.jenkins.usemango;
 
 import java.io.ByteArrayOutputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.StandardCharsets;
 
-import com.google.common.base.Strings;
-import it.infuse.jenkins.usemango.util.WinRegistry;
 import org.apache.commons.io.IOUtils;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -84,8 +80,10 @@ public class UseMangoTestExecutor implements Executable {
 		    		 // run command
 					int exitCode = launcher.launch(starter).join();
 
+					String stdout = out.toString(StandardCharsets.UTF_8.name());
+
 					// write byte stream to workspace (log)
-					ProjectUtils.createLogFile(workspace, test.getId(), out.toString(StandardCharsets.UTF_8.name()), listener);
+					ProjectUtils.createLogFile(workspace, test.getId(), stdout, listener);
 
 					// write outcome to listener (console)
 					if(exitCode == 0) {
@@ -97,25 +95,12 @@ public class UseMangoTestExecutor implements Executable {
 		            	listener.getLogger().println("FAIL: Test '"+test.getName()+"' failed");
 		            }
 
-                    String umLogPath = "\\useMango\\Logs\\junit.xml";
-                    String localLogPath;
+		            String logsPath = stdout.substring(0, stdout.lastIndexOf("\\run.log"));
+		            logsPath = logsPath.substring(logsPath.lastIndexOf("\n") + 1);
 
-                    String workingDataPath = WinRegistry.readString(WinRegistry.HKEY_LOCAL_MACHINE, "SOFTWARE\\WOW6432Node\\Infuse Consulting\\Mango", "WorkingDataPath");
-                    if (Strings.isNullOrEmpty(workingDataPath)) {
-                        throw new NullPointerException("A Windows registry key for useMango 'WorkingDataPath' doesn't exist.\n" +
-                                "Please create a key with the name 'WorkingDataPath' at 'HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Infuse Consulting\\Mango'.\n" +
-                                "Set the value to either 'ApplicationData' to store useMango data in local user AppData directory or set to your desired path.");
-                    } else if (workingDataPath.equals("ApplicationData")) {
-                        // APPDATA returns C:\Users\{username}\AppData\Roaming
-                        localLogPath = currentNode.toComputer().getEnvironment().get("APPDATA");
-                        localLogPath = localLogPath + umLogPath;
-                    } else {
-                        localLogPath = workingDataPath + umLogPath;
-                    }
-
-                    FilePath junitPath = new FilePath(currentNode.getChannel(), localLogPath);
+                    FilePath junitPath = new FilePath(currentNode.getChannel(), logsPath);
                     if (junitPath.exists()) {
-                        String junit = IOUtils.toString(junitPath.read(), StandardCharsets.UTF_8.name());
+                        String junit = IOUtils.toString(junitPath.child("\\junit.xml").read(), StandardCharsets.UTF_8.name());
 
                         // write result to workspace (junit)
                         workspace.child(ProjectUtils.RESULTS_DIR).
@@ -123,11 +108,10 @@ public class UseMangoTestExecutor implements Executable {
 
                         listener.getLogger().println("STOP: Outcome saved to workspace for test '" + test.getName() + "'");
                     } else {
-                        throw new IOException("useMango Junit log file not found at path '" + localLogPath);
+                        throw new IOException("useMango Junit log file not found at path '" + logsPath);
                     }
 
-				} catch (IOException | IllegalArgumentException | IllegalAccessException | InterruptedException |
-						InvocationTargetException | NullPointerException  e) {
+				} catch (IOException | IllegalArgumentException | InterruptedException | NullPointerException  e) {
 					if (workspace != null) {
 						ProjectUtils.createLogFile(workspace, test.getId(), e.getMessage(), listener);
 					}
