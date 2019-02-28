@@ -20,14 +20,14 @@ import it.infuse.jenkins.usemango.model.TestIndexItem;
 import it.infuse.jenkins.usemango.util.ProjectUtils;
 
 public class UseMangoTestExecutor implements Executable {
-	
+
 	private final Task task;
 	private final FilePath workspace;
 	private final BuildListener listener;
 	private final TestIndexItem test;
 	private final String command;
 
-    public UseMangoTestExecutor(Task task, FilePath workspace, BuildListener listener, 
+    public UseMangoTestExecutor(Task task, FilePath workspace, BuildListener listener,
     		TestIndexItem test, String command) {
     	this.task = task;
     	this.workspace = workspace;
@@ -44,11 +44,11 @@ public class UseMangoTestExecutor implements Executable {
     @SuppressFBWarnings(value="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE")
 	@Override
     public synchronized void run() {
-		
+
     	Node currentNode = Executor.of(this).getOwner().getNode();
 
     	if(currentNode != null) {
-    		
+
         	String operatingSystem = null;
     		try {
     			operatingSystem = currentNode.toComputer().getEnvironment().get("OS");
@@ -56,9 +56,9 @@ public class UseMangoTestExecutor implements Executable {
     			listener.error("Unable to determine OS for node '"+currentNode.getNodeName()+"', task stopped.");
     			e.printStackTrace(listener.getLogger());
     		}
-    		
+
     		if(operatingSystem != null && operatingSystem.toLowerCase().contains("windows")) {
-    		
+
 	    		listener.getLogger().println("START: Executing test '"+test.getName()+"' on Windows node "+currentNode.getNodeName());
 
 	    		String[] parts = command.split(" --password ");
@@ -67,22 +67,24 @@ public class UseMangoTestExecutor implements Executable {
 				ArgumentListBuilder args = new ArgumentListBuilder();
 				args.addTokenized(cmd);
 				args.addMasked(parts[1]);
-	    	
+
 		    	Launcher launcher = currentNode.createLauncher(listener);
 		    	ProcStarter starter = launcher.new ProcStarter();
 		    	ByteArrayOutputStream out = null;
 		    	try {
-		    		
+
 		    		// send test output to byte stream
 		    		out = new ByteArrayOutputStream();
 		    		starter = starter.cmds(args).stdout(out);
-		    		
+
 		    		 // run command
 					int exitCode = launcher.launch(starter).join();
-					
+
+					String stdout = out.toString(StandardCharsets.UTF_8.name());
+
 					// write byte stream to workspace (log)
-					ProjectUtils.createLogFile(workspace, test.getId(), out.toString(StandardCharsets.UTF_8.name()), listener);
-					
+					ProjectUtils.createLogFile(workspace, test.getId(), stdout, listener);
+
 					// write outcome to listener (console)
 					if(exitCode == 0) {
 						test.setPassed(true);
@@ -92,20 +94,24 @@ public class UseMangoTestExecutor implements Executable {
 		            	test.setPassed(false);
 		            	listener.getLogger().println("FAIL: Test '"+test.getName()+"' failed");
 		            }
-					
-					// ALLUSERPROFILE returns C:\ProgramData
-					FilePath junitPath = new FilePath(currentNode.getChannel(), currentNode.toComputer().getEnvironment().get("ALLUSERSPROFILE"));
 
-					// write result to workspace (junit)
-					String junit = IOUtils.toString(junitPath
-							.child("\\useMango\\Logs\\junit.xml").read(), StandardCharsets.UTF_8.name());
-					
-					workspace.child(ProjectUtils.RESULTS_DIR).
-						child(ProjectUtils.getJUnitFileName(test.getId())).write(junit, StandardCharsets.UTF_8.name());
-					
-					listener.getLogger().println("STOP: Outcome saved to workspace for test '"+test.getName()+"'");
-					
-				} catch (IOException | InterruptedException e) {
+		            String logsPath = stdout.substring(0, stdout.lastIndexOf("\\run.log"));
+		            logsPath = logsPath.substring(logsPath.lastIndexOf("\n") + 1);
+
+                    FilePath junitPath = new FilePath(currentNode.getChannel(), logsPath);
+                    if (junitPath.exists()) {
+                        String junit = IOUtils.toString(junitPath.child("\\junit.xml").read(), StandardCharsets.UTF_8.name());
+
+                        // write result to workspace (junit)
+                        workspace.child(ProjectUtils.RESULTS_DIR).
+                                child(ProjectUtils.getJUnitFileName(test.getId())).write(junit, StandardCharsets.UTF_8.name());
+
+                        listener.getLogger().println("STOP: Outcome saved to workspace for test '" + test.getName() + "'");
+                    } else {
+                        throw new IOException("useMango Junit log file not found at path '" + logsPath);
+                    }
+
+				} catch (IOException | IllegalArgumentException | InterruptedException | NullPointerException  e) {
 					if (workspace != null) {
 						ProjectUtils.createLogFile(workspace, test.getId(), e.getMessage(), listener);
 					}
