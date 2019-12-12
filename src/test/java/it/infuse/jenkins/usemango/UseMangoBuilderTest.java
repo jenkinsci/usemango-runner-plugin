@@ -15,7 +15,7 @@ public class UseMangoBuilderTest {
     final String useNodeLabel = "true";
     final String nodeLabel = "usemango";
     final String projectId = "TestProject";
-    final String folderName = "TestFolder";
+    final String tags = "tag1,tag2";
     final String testName = "TestFile";
     final String testStatus = "TestStatus";
     final String assignedTo = "TestAssignee";
@@ -23,9 +23,9 @@ public class UseMangoBuilderTest {
     @Ignore
     public void testConfigRoundtrip() throws Exception {
         FreeStyleProject project = jenkins.createFreeStyleProject();
-        project.getBuildersList().add(new UseMangoBuilder(useNodeLabel, nodeLabel, projectId, testName, folderName, testStatus, assignedTo));
+        project.getBuildersList().add(new UseMangoBuilder(useNodeLabel, nodeLabel, projectId, testName, tags, testStatus, assignedTo));
         project = jenkins.configRoundtrip(project);
-        jenkins.assertEqualDataBoundBeans(new UseMangoBuilder(useNodeLabel, nodeLabel, projectId, testName, folderName, testStatus, assignedTo), 
+        jenkins.assertEqualDataBoundBeans(new UseMangoBuilder(useNodeLabel, nodeLabel, projectId, testName, tags, testStatus, assignedTo),
         		project.getBuildersList().get(0));
     }
 

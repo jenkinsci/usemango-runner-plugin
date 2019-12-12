@@ -1,9 +1,11 @@
 package it.infuse.jenkins.usemango.model;
 
+import java.util.ArrayList;
+
 public class TestIndexParams {
 
 	private String projectId;
-	private String folderName;
+	private String tags;
 	private String testName;
 	private String testStatus;
 	private String assignedTo;
@@ -23,18 +25,16 @@ public class TestIndexParams {
 	}
 
 	/**
-	 * @return the folderName
+	 * @return the tags
 	 */
-	public String getFolderName() {
-		return folderName;
+	public String getTags() {
+		return tags;
 	}
 
 	/**
-	 * @param folderName the folderName to set
+	 * @param tags the tags to set
 	 */
-	public void setFolderName(String folderName) {
-		this.folderName = folderName;
-	}
+	public void addTags(String tags) { this.tags = tags; }
 
 	/**
 	 * @return the testName

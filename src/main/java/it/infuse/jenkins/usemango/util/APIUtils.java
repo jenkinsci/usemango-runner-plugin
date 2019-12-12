@@ -14,6 +14,7 @@ import it.infuse.jenkins.usemango.exception.UseMangoException;
 import it.infuse.jenkins.usemango.model.Project;
 import it.infuse.jenkins.usemango.model.TestIndexParams;
 import it.infuse.jenkins.usemango.model.TestIndexResponse;
+import it.infuse.jenkins.usemango.model.UmUser;
 import org.apache.http.HttpStatus;
 
 import java.io.IOException;
@@ -25,11 +26,13 @@ public class APIUtils {
 	static HttpTransport HTTP_TRANSPORT = new NetHttpTransport();
     static JsonFactory JSON_FACTORY = new JacksonFactory();
 
-    final static String API_VERSION = "/v2.0";
+    final static String API_VERSION = "/v2.1";
     final static String ENDPOINT_AUTHENTICATE 	= API_VERSION + "/authenticate";
     final static String ENDPOINT_REFRESH_TOKEN = API_VERSION + "/authenticate/refresh";
     final static String ENDPOINT_PROJECTS 	= API_VERSION + "/projects";
     final static String ENDPOINT_TESTINDEX = API_VERSION + "/projects/%s/testindex";
+    final static String ENDPOINT_USERS = API_VERSION + "/users";
+    final static String ENDPOINT_PROJECT_TAGS = ENDPOINT_PROJECTS + "/%s/testtags";
     
 	public static String[] getAuthenticationTokens(String useMangoUrl, String email, String password) throws UseMangoException, IOException {
 		HttpRequestFactory requestFactory = HTTP_TRANSPORT.createRequestFactory();
@@ -98,7 +101,7 @@ public class APIUtils {
 		while(true) { // handle pagination
 		    GenericUrl url = new GenericUrl(useMangoUrl);
 			url.setRawPath(String.format(ENDPOINT_TESTINDEX, params.getProjectId()));
-			url.set("folder", params.getFolderName());
+			url.set("tags", params.getTags());
 			url.set("filter", params.getTestName());
 			url.set("status", params.getTestStatus());
 			url.set("assignee", params.getAssignedTo());
@@ -129,6 +132,28 @@ public class APIUtils {
 		HttpRequest request = requestFactory.buildGetRequest(url);
 		request.setHeaders(getHeadersForServer(idToken));
 		return (ArrayList<Project>)request.execute().parseAs(new TypeToken<ArrayList<Project>>(){}.getType());
+	}
+
+	public static List<String> getProjectTags(String useMangoUrl, String idToken, String project) throws IOException {
+		HttpRequestFactory requestFactory = HTTP_TRANSPORT.createRequestFactory(
+				(HttpRequest request) -> {request.setParser(new JsonObjectParser(JSON_FACTORY));
+				});
+		GenericUrl url = new GenericUrl(useMangoUrl);
+		url.setRawPath(String.format(ENDPOINT_PROJECT_TAGS, project));
+		HttpRequest request = requestFactory.buildGetRequest(url);
+		request.setHeaders(getHeadersForServer(idToken));
+		return (ArrayList<String>)request.execute().parseAs(new TypeToken<ArrayList<String>>(){}.getType());
+	}
+
+	public static List<UmUser> getUsers(String useMangoUrl, String idToken) throws IOException {
+		HttpRequestFactory requestFactory = HTTP_TRANSPORT.createRequestFactory(
+				(HttpRequest request) -> {request.setParser(new JsonObjectParser(JSON_FACTORY));
+				});
+		GenericUrl url = new GenericUrl(useMangoUrl);
+		url.setRawPath(ENDPOINT_USERS);
+		HttpRequest request = requestFactory.buildGetRequest(url);
+		request.setHeaders(getHeadersForServer(idToken));
+		return (ArrayList<UmUser>)request.execute().parseAs(new TypeToken<ArrayList<UmUser>>(){}.getType());
 	}
 	
 	private static boolean isAnotherPage(TestIndexResponse response) {

@@ -3,6 +3,7 @@ package it.infuse.jenkins.usemango;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import javax.servlet.ServletException;
 
@@ -43,6 +44,7 @@ import it.infuse.jenkins.usemango.model.Project;
 import it.infuse.jenkins.usemango.model.TestIndexItem;
 import it.infuse.jenkins.usemango.model.TestIndexParams;
 import it.infuse.jenkins.usemango.model.TestIndexResponse;
+import it.infuse.jenkins.usemango.model.UmUser;
 import it.infuse.jenkins.usemango.util.APIUtils;
 import it.infuse.jenkins.usemango.util.ProjectUtils;
 import jenkins.model.Jenkins;
@@ -57,18 +59,18 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	private String useSlaveNodes;
 	private String nodeLabel;
 	private String projectId;
-	private String folderName;
+	private String tags;
 	private String testName;
 	private String testStatus;
 	private String assignedTo;
-	
+
 	@DataBoundConstructor
-	public UseMangoBuilder(String useSlaveNodes, String nodeLabel, String projectId, String folderName, String testName, 
+	public UseMangoBuilder(String useSlaveNodes, String nodeLabel, String projectId, String tags, String testName,
 			String testStatus, String assignedTo) {
 		this.useSlaveNodes = useSlaveNodes;
 		this.nodeLabel = nodeLabel;
 		this.projectId = projectId;
-		this.folderName = folderName;
+		this.tags = tags;
 		this.testName = testName;
 		this.testStatus = testStatus;
 		this.assignedTo = assignedTo;
@@ -94,11 +96,11 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 				listener.getLogger().println("Executing tests on '"+nodeLabel+"' node(s)");
 			}
 			else throw new RuntimeException("No '"+nodeLabel+"' nodes available to run tests");
-			
+
 			Gson gson = new GsonBuilder().setPrettyPrinting().create();
 			TestIndexParams params = new TestIndexParams(); 
 			params.setAssignedTo(this.assignedTo);
-			params.setFolderName(this.folderName);
+			params.addTags(this.tags);
 			params.setProjectId(this.projectId);
 			params.setTestName(this.testName);
 			params.setTestStatus(this.testStatus);
@@ -169,8 +171,8 @@ public class UseMangoBuilder extends Builder implements BuildStep {
     @Extension
     public final static class DescriptorImpl extends BuildStepDescriptor<Builder> {
 
-    	public ListBoxModel doFillProjectIdItems() {
-    		ListBoxModel items = new ListBoxModel();
+		public ListBoxModel doFillProjectIdItems() {
+			ListBoxModel items = new ListBoxModel();
     		items.add(""); // blank top option
     		try {
     			List<Project> projects = getProjects();
@@ -185,6 +187,24 @@ public class UseMangoBuilder extends Builder implements BuildStep {
     		}
     		return items;
     	}
+
+		public ListBoxModel doFillAssignedToItems() {
+			ListBoxModel items = new ListBoxModel();
+			items.add("Anybody");
+			items.add("Nobody");
+			try {
+				List<UmUser> users = getUsers();
+				if(users != null) {
+					users.forEach(user->{
+						items.add(user.getName() + " (" + user.getEmail() + ")");
+					});
+				}
+			}
+			catch(IOException | UseMangoException e) {
+				e.printStackTrace(System.out);
+			}
+			return items;
+		}
         
         public ListBoxModel doFillTestStatusItems() {
     		ListBoxModel items = new ListBoxModel();
@@ -196,7 +216,7 @@ public class UseMangoBuilder extends Builder implements BuildStep {
     		items.add("Review");
     		return items;
     	}
-    	
+
         @POST
         public FormValidation doCheckNodeLabel(@QueryParameter String nodeLabel) 
         		throws IOException, ServletException {
@@ -215,12 +235,34 @@ public class UseMangoBuilder extends Builder implements BuildStep {
         public FormValidation doCheckProjectId(@QueryParameter String value)
                 throws IOException, ServletException {
             if (value.length() == 0) return FormValidation.error("Please set a Project ID");
-            return FormValidation.ok();
+
+            List<String> projectTags = new ArrayList<>();
+			try {
+				projectTags = getProjectTags(value);
+			}
+			catch(IOException | UseMangoException e) {
+				e.printStackTrace(System.out);
+			}
+
+			if(projectTags != null && !projectTags.isEmpty()) {
+				StringBuilder resultsHtml = new StringBuilder("<label><strong>Available tags:</strong></label>");
+				resultsHtml.append("<div id=\"tempTagsContainer\"style=\"max-height:150px;overflow-y:scroll;padding-top:5px;padding-bottom:5px;\">");
+				resultsHtml.append("<ul>");
+				projectTags.forEach((item)->{
+					resultsHtml.append("<li>"+item+"</li>");
+				});
+				resultsHtml.append("</ul>");
+				resultsHtml.append("</div>");
+				return FormValidation.okWithMarkup(resultsHtml.toString());
+			}
+			else {
+				return FormValidation.warningWithMarkup("Project doesn't have any test tags.");
+			}
         }
 
     	public FormValidation doValidateSettings(
     			@QueryParameter("projectId") final String projectId,
-    			@QueryParameter("folderName") final String folderName,
+    			@QueryParameter("tags") final String tags,
     			@QueryParameter("testName") final String testName,
     	        @QueryParameter("testStatus") final String testStatus,
     	        @QueryParameter("assignedTo") final String assignedTo) throws IOException, ServletException {
@@ -233,9 +275,15 @@ public class UseMangoBuilder extends Builder implements BuildStep {
     		}
     		else {
 	    		try {
-	    			TestIndexParams params = new TestIndexParams(); 
-	    			params.setAssignedTo(assignedTo);
-	    			params.setFolderName(folderName);
+					List<UmUser> users = getUsers();
+					String userId = assignedTo;
+	    			if (!userId.contains("Anybody") && !userId.contains("Nobody")){
+						String userEmail = StringUtils.substringBetween(userId, "(", ")");
+						userId = users.stream().filter(u -> u.getEmail().equals(userEmail)).collect(Collectors.toList()).get(0).getId();
+					}
+	    			TestIndexParams params = new TestIndexParams();
+	    			params.setAssignedTo(userId);
+	    			params.addTags(tags);
 	    			params.setProjectId(projectId);
 	    			params.setTestName(testName);
 	    			params.setTestStatus(testStatus);
@@ -250,9 +298,16 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	    				
 	    				StringBuilder resultsHtml = new StringBuilder("<div style=\"max-height:300px;overflow-y:scroll;padding-top:5px;\">");
 	    				resultsHtml.append("<table width=\"100%\" border=\"0\" cellspacing=\"6\" cellpadding=\"6\" style=\"border:1px solid rgba(0, 0, 0, 0.1);width:100%;background-color:#eee;\">");
-	    				resultsHtml.append("<tr style=\"background-color:rgba(0, 0, 0, 0.1);\" align=\"left\"><th>Name</th><th>Folder</th><th>Status</th><th>Assigned To</th></tr>");
+	    				resultsHtml.append("<tr style=\"background-color:rgba(0, 0, 0, 0.1);\" align=\"left\"><th>Name</th><th>Tags</th><th>Status</th><th>Assigned To</th></tr>");
 	    				indexes.getItems().forEach((item)->{
-	    					resultsHtml.append("<tr><td>"+item.getName()+"</td><td>"+item.getFolder()+"</td><td>"+item.getStatus()+"</td><td>"+item.getAssignee()+"</td></tr>");
+	    					String assignee = item.getAssignee();
+							if(!item.getAssignee().isEmpty()){
+								List<UmUser> foundUsers = users.stream().filter(u -> u.getId().equals(item.getAssignee())).collect(Collectors.toList());
+								if(foundUsers.size() > 0){
+									assignee = foundUsers.get(0).getName() + " (" + foundUsers.get(0).getEmail() + ")";
+								}
+							}
+	    					resultsHtml.append("<tr><td>"+item.getName()+"</td><td>"+String.join(", ", item.getTags())+"</td><td>"+item.getStatus()+"</td><td>"+assignee+"</td></tr>");
 	    				});
 	    				resultsHtml.append("</table>");
 	    				resultsHtml.append("</div>");
@@ -281,7 +336,7 @@ public class UseMangoBuilder extends Builder implements BuildStep {
             return "Run useMango tests";
         }
     }
-	
+
 	private static StandardUsernamePasswordCredentials getCredentials(String credentialsId) {
 		List<StandardUsernamePasswordCredentials> credentailsList = CredentialsProvider.lookupCredentials(
 				StandardUsernamePasswordCredentials.class, Jenkins.getInstance(), ACL.SYSTEM,
@@ -353,6 +408,16 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 		return APIUtils.getProjects(useMangoUrl, ID_TOKEN);
 	}
 
+	private static List<String> getProjectTags(String projectId) throws IOException, UseMangoException{
+		checkTokenExistsAndValid();
+		return APIUtils.getProjectTags(useMangoUrl, ID_TOKEN, projectId);
+	}
+
+	private static List<UmUser> getUsers() throws IOException, UseMangoException {
+		checkTokenExistsAndValid();
+		return APIUtils.getUsers(useMangoUrl, ID_TOKEN);
+	}
+
 	private static String getUseMangoCommand(String projectId, String testName) {
 		StringBuffer sb = new StringBuffer("\"C:\\Program Files (x86)\\Infuse Consulting\\useMango\\App\\MangoMotor.exe\"");
 		sb.append(" -s \""+useMangoUrl+"\"");
@@ -382,10 +447,10 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	}
 
 	/**
-	 * @return the folderName
+	 * @return the tags
 	 */
-	public String getFolderName() {
-		return folderName;
+	public String getTags() {
+		return tags;
 	}
 
 	/**
@@ -422,5 +487,5 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	public String getUseSlaveNodes() {
 		return useSlaveNodes;
 	}
-	
+
 }
