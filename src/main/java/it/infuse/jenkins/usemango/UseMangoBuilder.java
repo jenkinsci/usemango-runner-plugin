@@ -275,12 +275,12 @@ public class UseMangoBuilder extends Builder implements BuildStep {
     		}
     		else {
 	    		try {
-					List<UmUser> users = getUsers();
-					String userId = assignedTo;
+	    		    List<UmUser> users = getUsers();
+	    		    String userId = assignedTo;
 	    			if (!userId.contains("Anybody") && !userId.contains("Nobody")){
-						String userEmail = StringUtils.substringBetween(userId, "(", ")");
-						userId = users.stream().filter(u -> u.getEmail().equals(userEmail)).collect(Collectors.toList()).get(0).getId();
-					}
+	    			    String userEmail = StringUtils.substringBetween(userId, "(", ")");
+	    			    userId = users.stream().filter(u -> u.getEmail().equals(userEmail)).collect(Collectors.toList()).get(0).getId();
+	    			}
 	    			TestIndexParams params = new TestIndexParams();
 	    			params.setAssignedTo(userId);
 	    			params.addTags(tags);
@@ -300,14 +300,14 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	    				resultsHtml.append("<table width=\"100%\" border=\"0\" cellspacing=\"6\" cellpadding=\"6\" style=\"border:1px solid rgba(0, 0, 0, 0.1);width:100%;background-color:#eee;\">");
 	    				resultsHtml.append("<tr style=\"background-color:rgba(0, 0, 0, 0.1);\" align=\"left\"><th>Name</th><th>Tags</th><th>Status</th><th>Assigned To</th></tr>");
 	    				indexes.getItems().forEach((item)->{
-	    					String assignee = item.getAssignee();
-							if(!item.getAssignee().isEmpty()){
-								List<UmUser> foundUsers = users.stream().filter(u -> u.getId().equals(item.getAssignee())).collect(Collectors.toList());
-								if(foundUsers.size() > 0){
-									assignee = foundUsers.get(0).getName() + " (" + foundUsers.get(0).getEmail() + ")";
-								}
-							}
-	    					resultsHtml.append("<tr><td>"+item.getName()+"</td><td>"+String.join(", ", item.getTags())+"</td><td>"+item.getStatus()+"</td><td>"+assignee+"</td></tr>");
+	    				    String assignee = item.getAssignee();
+	    				    if(!item.getAssignee().isEmpty()){
+	    				        List<UmUser> foundUsers = users.stream().filter(u -> u.getId().equals(item.getAssignee())).collect(Collectors.toList());
+	    				        if(foundUsers.size() > 0){
+	    				            assignee = foundUsers.get(0).getName() + " (" + foundUsers.get(0).getEmail() + ")";
+	    				        }
+	    				    }
+	    				    resultsHtml.append("<tr><td>"+item.getName()+"</td><td>"+String.join(", ", item.getTags())+"</td><td>"+item.getStatus()+"</td><td>"+assignee+"</td></tr>");
 	    				});
 	    				resultsHtml.append("</table>");
 	    				resultsHtml.append("</div>");
