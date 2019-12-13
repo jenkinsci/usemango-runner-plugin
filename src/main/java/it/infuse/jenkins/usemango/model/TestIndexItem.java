@@ -3,6 +3,8 @@ package it.infuse.jenkins.usemango.model;
 import com.google.api.client.json.GenericJson;
 import com.google.api.client.util.Key;
 
+import java.util.List;
+
 public class TestIndexItem extends GenericJson {
 
 	@Key("Id")
@@ -11,8 +13,8 @@ public class TestIndexItem extends GenericJson {
 	private String name;
 	@Key("Status")
 	private String status;
-	@Key("Folder")
-	private String folder;
+	@Key("Tags")
+	private List<String> tags;
 	@Key("Assignee")
 	private String assignee;
 	@Key("LastModified")
@@ -38,10 +40,10 @@ public class TestIndexItem extends GenericJson {
 		return status;
 	}
 	/**
-	 * @return the folder
+	 * @return the tags
 	 */
-	public String getFolder() {
-		return folder;
+	public List<String> getTags() {
+		return tags;
 	}
 	/**
 	 * @return the assignee

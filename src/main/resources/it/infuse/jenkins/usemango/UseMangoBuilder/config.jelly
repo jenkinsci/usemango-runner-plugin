@@ -10,10 +10,10 @@
         <f:textbox checkMethod="post"/>
       </f:entry>
     </f:optionalBlock>
-	<f:entry field="projectId" title="Project ID">
+    <f:entry field="projectId" title="Project ID">
         <f:select checkMethod="post"/>
     </f:entry>
-	<f:entry field="folderName" title="Folder name">
+	<f:entry field="tags" title="Tags">
         <f:textbox/>
     </f:entry>
 	<f:entry field="testName" title="Test name">
@@ -23,8 +23,8 @@
 		<f:select/>
     </f:entry>
     <f:entry field="assignedTo" title="Assigned to">
-        <f:textbox/>
+        <f:select/>
     </f:entry>
 	<f:validateButton title="Validate" progress="Validating..." 
-		method="validateSettings" with="projectId,folderName,testName,testStatus,assignedTo" />
+		method="validateSettings" with="projectId,tags,testName,testStatus,assignedTo"/>
 </j:jelly>
