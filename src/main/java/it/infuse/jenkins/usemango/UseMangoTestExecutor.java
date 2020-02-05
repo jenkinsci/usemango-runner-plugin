@@ -1,9 +1,13 @@
 package it.infuse.jenkins.usemango;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
+import java.util.*;
 
+import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials;
 import org.apache.commons.io.IOUtils;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -25,15 +29,20 @@ public class UseMangoTestExecutor implements Executable {
 	private final FilePath workspace;
 	private final BuildListener listener;
 	private final TestIndexItem test;
-	private final String command;
+	private final String useMangoUrl;
+	private final String projectId;
+	private final StandardUsernamePasswordCredentials credentials;
 
     public UseMangoTestExecutor(Task task, FilePath workspace, BuildListener listener,
-    		TestIndexItem test, String command) {
+    		TestIndexItem test, String useMangoUrl, String projectId,
+            StandardUsernamePasswordCredentials credentials){
     	this.task = task;
     	this.workspace = workspace;
         this.listener = listener;
         this.test = test;
-        this.command = command;
+        this.useMangoUrl = useMangoUrl;
+        this.projectId = projectId;
+        this.credentials = credentials;
     }
 
     @Override
@@ -59,14 +68,10 @@ public class UseMangoTestExecutor implements Executable {
 
     		if(operatingSystem != null && operatingSystem.toLowerCase().contains("windows")) {
 
+    			String motorPath = getMotorPath(currentNode);
+				ArgumentListBuilder args = getUMCommandArgs(motorPath);
+
 	    		listener.getLogger().println("START: Executing test '"+test.getName()+"' on Windows node "+currentNode.getNodeName());
-
-	    		String[] parts = command.split(" --password ");
-	    		String cmd = parts[0].concat(" -a ");
-
-				ArgumentListBuilder args = new ArgumentListBuilder();
-				args.addTokenized(cmd);
-				args.addMasked(parts[1]);
 
 		    	Launcher launcher = currentNode.createLauncher(listener);
 		    	ProcStarter starter = launcher.new ProcStarter();
@@ -144,5 +149,44 @@ public class UseMangoTestExecutor implements Executable {
     public long getEstimatedDuration() {
         return 60000l; // 1 minute
     }
+
+    private ArgumentListBuilder getUMCommandArgs(String motorPath) {
+    	ArgumentListBuilder args = new ArgumentListBuilder();
+    	args.addTokenized(motorPath);
+    	args.addTokenized(" -s \""+useMangoUrl+"\"");
+		args.addTokenized(" -p \""+projectId+"\"");
+		args.addTokenized(" --testname \""+test.getName()+"\"");
+		args.addTokenized(" -e \""+credentials.getUsername()+"\"");
+		args.addTokenized(" -a ");
+		args.addMasked(credentials.getPassword().getPlainText());
+		return args;
+    }
+
+    private String getMotorPath(Node node){
+    	try {
+    		//User's home directory
+			String userHome = Objects.requireNonNull(node.toComputer()).getSystemProperties().get("user.home").toString();
+			String umApp = userHome + "\\AppData\\Roaming\\useMango\\app";
+			File app;
+
+			//Selecting app branch - dev or public
+			List<File> appBranches = Arrays.asList(Objects.requireNonNull(new File(umApp).listFiles(File::isDirectory)));
+			if(appBranches.stream().anyMatch(b -> b.getName().equalsIgnoreCase("dev"))){
+				app = appBranches.stream().filter(b -> b.getName().equalsIgnoreCase("dev")).findFirst().get();
+			} else {
+				app = appBranches.stream().filter(b -> b.getName().equalsIgnoreCase("public")).findFirst().get();
+			}
+
+			//Selecting app version, selecting the highest
+			List<File> appVersions = Arrays.asList(Objects.requireNonNull(app.listFiles(File::isDirectory)));
+			appVersions.sort((o1, o2) -> o1.getName().compareToIgnoreCase(o2.getName()));
+
+			app = appVersions.get(0);
+			return app.getAbsolutePath() + "\\MangoMotor.exe";
+		}
+		catch (InterruptedException | IOException | NullPointerException e) {
+			throw new RuntimeException(e);
+		}
+	}
 
 }

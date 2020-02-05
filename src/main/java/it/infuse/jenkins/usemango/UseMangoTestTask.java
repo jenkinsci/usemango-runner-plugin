@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 
+import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials;
 import org.acegisecurity.AccessDeniedException;
 
 import hudson.model.AbstractBuild;
@@ -26,15 +27,20 @@ public class UseMangoTestTask extends AbstractQueueTask implements AccessControl
 	private final AbstractBuild<?,?> build;
 	private final BuildListener listener;
 	private final TestIndexItem test;
-	private final String command;
+	private final String useMangoUrl;
+	private final String projectId;
+	private final StandardUsernamePasswordCredentials credentials;
 
-    public UseMangoTestTask(String nodeLabel, AbstractBuild<?,?> build, BuildListener listener, 
-    		TestIndexItem test, String command) {
+    public UseMangoTestTask(String nodeLabel, AbstractBuild<?,?> build, BuildListener listener,
+    		TestIndexItem test, String useMangoUrl, String projectId,
+			StandardUsernamePasswordCredentials credentials) {
+		this.nodeLabel = nodeLabel;
     	this.build = build;
         this.listener = listener;
         this.test = test;
-        this.command = command;
-        this.nodeLabel = nodeLabel;
+        this.useMangoUrl = useMangoUrl;
+        this.projectId = projectId;
+        this.credentials = credentials;
     }
 
     public String getName() {
@@ -116,6 +122,7 @@ public class UseMangoTestTask extends AbstractQueueTask implements AccessControl
 	}
 	
     public Executable createExecutable() throws IOException {
-    	return new UseMangoTestExecutor(this, build.getWorkspace(), listener, test, command);
+    	return new UseMangoTestExecutor(this, build.getWorkspace(), listener, test, useMangoUrl,
+										projectId, credentials);
     }
 }

@@ -1,7 +1,11 @@
 package it.infuse.jenkins.usemango;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -9,6 +13,7 @@ import javax.servlet.ServletException;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import hudson.model.*;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.codec.binary.Base64;
 import org.jenkinsci.Symbol;
@@ -27,12 +32,6 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.Extension;
 import hudson.FilePath;
 import hudson.Launcher;
-import hudson.model.AbstractBuild;
-import hudson.model.AbstractProject;
-import hudson.model.BuildListener;
-import hudson.model.Label;
-import hudson.model.Result;
-import hudson.model.User;
 import hudson.security.ACL;
 import hudson.tasks.BuildStep;
 import hudson.tasks.BuildStepDescriptor;
@@ -79,59 +78,65 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	@SuppressFBWarnings(value="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE")
 	@Override
 	public boolean perform(AbstractBuild<?,?> build, Launcher launcher, BuildListener listener) 
-			throws InterruptedException, IOException {
-		
-		if(ProjectUtils.hasCorrectPermissions(User.current())) { // check user allowed to build this job
-			
+			throws InterruptedException, IOException{
+
+		List<UseMangoTestTask> testTasks = new ArrayList<UseMangoTestTask>();
+		UseMangoTestResultsAction umTestResultsAction = new UseMangoTestResultsAction();
+
+		try {
+			if(!ProjectUtils.hasCorrectPermissions(User.current())){
+				String msg = "Jenkins user '"+User.current()+"' does not have permissions to configure and build this Job - please contact your system administrator, or update the users' security settings.";
+				umTestResultsAction.setBuildException(msg);
+				listener.error(msg);
+				return false;
+			}
+
 			prepareWorkspace(build.getWorkspace());
-			
+
 			boolean useSlaves = Boolean.valueOf(useSlaveNodes);
 			if(!useSlaves || StringUtils.isBlank(nodeLabel)) {
 				listener.getLogger().println("Not using labelled nodes, or no label defined.");
 				nodeLabel = "master"; // default to 'master'
 			}
 			Label label = Label.get(nodeLabel);
-			
+
 			if(label != null && label.getNodes() != null && label.getNodes().size() > 0) {
 				listener.getLogger().println("Executing tests on '"+nodeLabel+"' node(s)");
 			}
 			else throw new RuntimeException("No '"+nodeLabel+"' nodes available to run tests");
 
 			Gson gson = new GsonBuilder().setPrettyPrinting().create();
-			TestIndexParams params = new TestIndexParams(); 
+			TestIndexParams params = new TestIndexParams();
 			params.setAssignedTo(this.assignedTo);
 			params.addTags(this.tags);
 			params.setProjectId(this.projectId);
 			params.setTestName(this.testName);
 			params.setTestStatus(this.testStatus);
 			listener.getLogger().println("TestIndex API parameters:\n"+gson.toJson(params));
-			
+
 			TestIndexResponse indexes = null;
-			try {
-				indexes = getTestIndexes(params);
-			} catch (UseMangoException e) {
-				throw new RuntimeException(e);
-			}
-				
-			if(Objects.requireNonNull(indexes).size() > 0) {
-			
+			indexes = getTestIndexes(params);
+
+			if(indexes != null && indexes.getItems() != null && indexes.getItems().size() > 0) {
+
 				build.getWorkspace().child(ProjectUtils.LOG_DIR).mkdirs();
 				build.getWorkspace().child(ProjectUtils.RESULTS_DIR).mkdirs();
-				
+
 				listener.getLogger().println(indexes.getItems().size() + " tests retrieved:\n"+gson.toJson(indexes.getItems()));
-				
+
 				List<String> testIds = new ArrayList<String>();
 				indexes.getItems().forEach((test) -> {
 					try {
+						UseMangoTestTask testTask = new UseMangoTestTask(nodeLabel, build, listener, test, useMangoUrl, projectId, credentials);
 						testIds.add(test.getId());
-						Jenkins.getInstance().getQueue().schedule2(new UseMangoTestTask(nodeLabel, build, listener, test, 
-			            		getUseMangoCommand(this.projectId, test.getName())), Jenkins.getInstance().getQuietPeriod());
-		            } catch(Exception e) {
-		            	listener.error("Error executing test: "+test.getName());
-		            	throw new RuntimeException(e);
-		            }
+						testTasks.add(testTask);
+						Jenkins.getInstance().getQueue().schedule2(testTask, Jenkins.getInstance().getQuietPeriod());
+					} catch(Exception e) {
+						listener.error("Error executing test: "+test.getName());
+						throw new RuntimeException(e);
+					}
 				});
-				
+
 				String testId;
 				while(!testIds.isEmpty()) { // keep alive until all test tasks are done
 					testId = null;
@@ -144,26 +149,39 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 					if(testId != null) testIds.remove(testId);
 					Thread.sleep(1000);
 				}
-				
+
 				boolean testSuitePassed = true;
 				for(TestIndexItem test : indexes.getItems()) {
 					if(!test.isPassed()) testSuitePassed = false;
 				}
-				
+
 				if(!testSuitePassed) build.setResult(Result.FAILURE); // set job to failure if a test failed
-				
+
 				listener.getLogger().println("\nTest execution complete.\n\nThank you for using useMango :-)\n");
-			
+
+				String serverLink = UseMangoConfiguration.get().getLocation();
+				umTestResultsAction.addTestResults(indexes.getItems(), serverLink);
 			}
 			else {
-				listener.getLogger().println("No tests retrieved from useMango account, please check settings and try again.");
+				String msg = "No tests retrieved from useMango account, please check settings and try again.";
+				umTestResultsAction.setBuildException(msg);
+				listener.getLogger().println(msg);
 			}
 			return true;
-			
 		}
-		else {
-			listener.error("Jenkins user '"+User.current()+"' does not have permissions to configure and build this Job - please contact your system administrator, or update the users' security settings.");
-			return false;
+		catch (RuntimeException | UseMangoException e) {
+			umTestResultsAction.setBuildException(e.getMessage());
+			throw new RuntimeException(e);
+		}
+		catch (InterruptedException e) {
+			for (UseMangoTestTask task: testTasks) {
+				Jenkins.getInstance().getQueue().cancel(task);
+			}
+			umTestResultsAction.setBuildException("Build was aborted, all useMango tests were cancelled.");
+			throw e;
+		}
+		finally {
+			build.addAction(umTestResultsAction);
 		}
 	}
 	
@@ -416,16 +434,6 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	private static List<UmUser> getUsers() throws IOException, UseMangoException {
 		checkTokenExistsAndValid();
 		return APIUtils.getUsers(useMangoUrl, ID_TOKEN);
-	}
-
-	private static String getUseMangoCommand(String projectId, String testName) {
-		StringBuffer sb = new StringBuffer("\"C:\\Program Files (x86)\\Infuse Consulting\\useMango\\App\\MangoMotor.exe\"");
-		sb.append(" -s \""+useMangoUrl+"\"");
-		sb.append(" -p \""+projectId+"\"");
-		sb.append(" --testname \""+testName+"\"");
-		sb.append(" -e \""+credentials.getUsername()+"\"");
-		sb.append(" --password \""+credentials.getPassword().getPlainText()+"\"");
-		return sb.toString();
 	}
 	
 	private static void prepareWorkspace(FilePath workspace) throws IOException, InterruptedException {

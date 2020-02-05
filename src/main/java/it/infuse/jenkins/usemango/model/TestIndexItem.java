@@ -19,7 +19,7 @@ public class TestIndexItem extends GenericJson {
 	private String assignee;
 	@Key("LastModified")
 	private String lastModified; 
-	private boolean passed;
+	private boolean passed = false;
 	
 	/**
 	 * @return the id

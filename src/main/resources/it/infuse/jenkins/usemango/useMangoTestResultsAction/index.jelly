@@ -1,0 +1,50 @@
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core" xmlns:l="/lib/layout" xmlns:st="jelly:stapler">
+    <style type="text/css">
+        table {
+          border-collapse: collapse;
+          width: 100%;
+        }
+
+        th, td {
+          padding: 8px;
+          text-align: left;
+          border-bottom: 1px solid #ddd;
+        }
+
+        th {
+          background-color: #f5f5f5
+        }
+    </style>
+    <l:layout title="useMango Test Results">
+        <l:side-panel>
+            <st:include page="sidepanel.jelly" it="${it.run}" optional="true" />
+        </l:side-panel>
+        <l:main-panel>
+            <h1>
+                useMango Test Results
+            </h1>
+
+            <j:if test="${it != null}">
+                <j:if test="${it.errorMessage == null}">
+                    <table>
+                        <tr>
+                            <th>Test name</th>
+                            <th>Result</th>
+                        </tr>
+                        <j:forEach var="test" items="${it.tests}">
+                            <tr>
+                                <td><a href="${test.reportLink}" target="_blank">${test.name}</a></td>
+                                <td>${test.result}</td>
+                            </tr>
+                        </j:forEach>
+                    </table>
+                </j:if>
+                <j:if test="${it.errorMessage != null}">
+                    <div class="error">${it.errorMessage}</div>
+                </j:if>
+            </j:if>
+
+        </l:main-panel>
+    </l:layout>
+</j:jelly>
