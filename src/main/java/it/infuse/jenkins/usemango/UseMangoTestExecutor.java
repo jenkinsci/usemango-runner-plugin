@@ -173,7 +173,11 @@ public class UseMangoTestExecutor implements Executable {
 			List<File> appBranches = Arrays.asList(Objects.requireNonNull(new File(umApp).listFiles(File::isDirectory)));
 			if(appBranches.stream().anyMatch(b -> b.getName().equalsIgnoreCase("dev"))){
 				app = appBranches.stream().filter(b -> b.getName().equalsIgnoreCase("dev")).findFirst().get();
-			} else {
+			}
+			else if (appBranches.stream().anyMatch(b -> b.getName().equalsIgnoreCase("qa"))) {
+				app = appBranches.stream().filter(b -> b.getName().equalsIgnoreCase("qa")).findFirst().get();
+			}
+			else {
 				app = appBranches.stream().filter(b -> b.getName().equalsIgnoreCase("public")).findFirst().get();
 			}
 
@@ -181,7 +185,7 @@ public class UseMangoTestExecutor implements Executable {
 			List<File> appVersions = Arrays.asList(Objects.requireNonNull(app.listFiles(File::isDirectory)));
 			appVersions.sort((o1, o2) -> o1.getName().compareToIgnoreCase(o2.getName()));
 
-			app = appVersions.get(0);
+			app = appVersions.get(appVersions.size() - 1);
 			return app.getAbsolutePath() + "\\MangoMotor.exe";
 		}
 		catch (InterruptedException | IOException | NullPointerException e) {
