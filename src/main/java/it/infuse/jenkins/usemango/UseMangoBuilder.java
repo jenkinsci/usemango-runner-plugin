@@ -125,7 +125,7 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 					try {
 						testIds.add(test.getId());
 						Jenkins.getInstance().getQueue().schedule2(new UseMangoTestTask(nodeLabel, build, listener, test, 
-			            		getUseMangoCommand(this.projectId, test.getName())), Jenkins.getInstance().getQuietPeriod());
+			            		getUseMangoCommand(this.projectId, test.getId())), Jenkins.getInstance().getQuietPeriod());
 		            } catch(Exception e) {
 		            	listener.error("Error executing test: "+test.getName());
 		            	throw new RuntimeException(e);
@@ -418,11 +418,11 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 		return APIUtils.getUsers(useMangoUrl, ID_TOKEN);
 	}
 
-	private static String getUseMangoCommand(String projectId, String testName) {
+	private static String getUseMangoCommand(String projectId, String testId) {
 		StringBuffer sb = new StringBuffer("\"C:\\Program Files (x86)\\Infuse Consulting\\useMango\\App\\MangoMotor.exe\"");
 		sb.append(" -s \""+useMangoUrl+"\"");
 		sb.append(" -p \""+projectId+"\"");
-		sb.append(" --testname \""+testName+"\"");
+		sb.append(" -i \""+testId+"\"");
 		sb.append(" -e \""+credentials.getUsername()+"\"");
 		sb.append(" --password \""+credentials.getPassword().getPlainText()+"\"");
 		return sb.toString();
