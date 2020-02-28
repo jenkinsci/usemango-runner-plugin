@@ -34,7 +34,7 @@
                         </tr>
                         <j:forEach var="test" items="${it.tests}">
                             <tr>
-                                <td>${test.name}</td>
+                                <td><a href="${test.reportLink}" target="_blank">${test.name}</a></td>
                                 <td>${test.result}</td>
                             </tr>
                         </j:forEach>

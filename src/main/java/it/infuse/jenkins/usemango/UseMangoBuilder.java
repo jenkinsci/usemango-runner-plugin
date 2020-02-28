@@ -81,7 +81,8 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 			throws InterruptedException, IOException{
 
 		List<UseMangoTestTask> testTasks = new ArrayList<UseMangoTestTask>();
-		UseMangoTestResultsAction umTestResultsAction = new UseMangoTestResultsAction();
+		String serverLink = UseMangoConfiguration.get().getLocation();
+		UseMangoTestResultsAction umTestResultsAction = new UseMangoTestResultsAction(serverLink);
 
 		try {
 			if(!ProjectUtils.hasCorrectPermissions(User.current())){
@@ -159,8 +160,7 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 
 				listener.getLogger().println("\nTest execution complete.\n\nThank you for using useMango :-)\n");
 
-				String serverLink = UseMangoConfiguration.get().getLocation();
-				umTestResultsAction.addTestResults(indexes.getItems(), serverLink);
+				umTestResultsAction.addTestResults(indexes.getItems());
 			}
 			else {
 				String msg = "No tests retrieved from useMango account, please check settings and try again.";

@@ -12,8 +12,11 @@ public class UseMangoTestResultsAction implements RunAction2 {
     private transient Run run;
     private List<TestResult> tests;
     private String errorMessage;
+    private String serverLink;
 
-    public UseMangoTestResultsAction() { }
+    public UseMangoTestResultsAction(String serverLink) {
+        this.serverLink = serverLink;
+    }
 
     @Override
     public String getIconFileName() { return "graph.png"; }
@@ -44,15 +47,19 @@ public class UseMangoTestResultsAction implements RunAction2 {
 
     public String getErrorMessage() { return this.errorMessage; };
 
-    public void addTestResults(List<TestIndexItem> tests, String link){
+    public void addTestResults(List<TestIndexItem> tests){
         this.tests = new ArrayList<TestResult>();
         for (TestIndexItem test: tests) {
-            this.tests.add(new TestResult(test.getName(), test.isPassed(), link));
+            this.tests.add(new TestResult(test.getName(), test.isPassed(), getReportLink(test.getRunId())));
         }
     }
 
     public void setBuildException(String errorMessage){
         this.errorMessage = errorMessage;
+    }
+
+    private String getReportLink(String runId){
+        return serverLink + "/report.html?runId=" + runId;
     }
 
     public static class TestResult {
