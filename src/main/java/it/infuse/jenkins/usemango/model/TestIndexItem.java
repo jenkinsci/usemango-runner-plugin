@@ -19,7 +19,8 @@ public class TestIndexItem extends GenericJson {
 	private String assignee;
 	@Key("LastModified")
 	private String lastModified; 
-	private boolean passed;
+	private boolean passed = false;
+	private String runId;
 	
 	/**
 	 * @return the id
@@ -64,10 +65,21 @@ public class TestIndexItem extends GenericJson {
 		return passed;
 	}
 	/**
+	 * @return the runId
+	 */
+	public String getRunId() {
+		return runId;
+	}
+	/**
 	 * @param passed the passed to set
 	 */
 	public void setPassed(boolean passed) {
 		this.passed = passed;
 	}
-
+	/**
+	 * @param runId - test execution id
+	 */
+	public void setRunId(String runId) {
+		this.runId = runId;
+	}
 }

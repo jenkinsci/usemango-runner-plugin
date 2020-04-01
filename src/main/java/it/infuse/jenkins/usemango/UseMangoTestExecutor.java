@@ -1,9 +1,13 @@
 package it.infuse.jenkins.usemango;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
+import java.util.*;
 
+import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials;
 import org.apache.commons.io.IOUtils;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -25,15 +29,20 @@ public class UseMangoTestExecutor implements Executable {
 	private final FilePath workspace;
 	private final BuildListener listener;
 	private final TestIndexItem test;
-	private final String command;
+	private final String useMangoUrl;
+	private final String projectId;
+	private final StandardUsernamePasswordCredentials credentials;
 
     public UseMangoTestExecutor(Task task, FilePath workspace, BuildListener listener,
-    		TestIndexItem test, String command) {
+    		TestIndexItem test, String useMangoUrl, String projectId,
+            StandardUsernamePasswordCredentials credentials){
     	this.task = task;
     	this.workspace = workspace;
         this.listener = listener;
         this.test = test;
-        this.command = command;
+        this.useMangoUrl = useMangoUrl;
+        this.projectId = projectId;
+        this.credentials = credentials;
     }
 
     @Override
@@ -58,20 +67,20 @@ public class UseMangoTestExecutor implements Executable {
     		}
 
     		if(operatingSystem != null && operatingSystem.toLowerCase().contains("windows")) {
-
-	    		listener.getLogger().println("START: Executing test '"+test.getName()+"' on Windows node "+currentNode.getNodeName());
-
-	    		String[] parts = command.split(" --password ");
-	    		String cmd = parts[0].concat(" -a ");
-
-				ArgumentListBuilder args = new ArgumentListBuilder();
-				args.addTokenized(cmd);
-				args.addMasked(parts[1]);
-
-		    	Launcher launcher = currentNode.createLauncher(listener);
-		    	ProcStarter starter = launcher.new ProcStarter();
-		    	ByteArrayOutputStream out = null;
+                ByteArrayOutputStream out = null;
 		    	try {
+                    String umAppData;
+                    //User's home directory
+                    String userHome = Objects.requireNonNull(currentNode.toComputer()).getSystemProperties().get("user.home").toString();
+                    umAppData = userHome + "\\AppData\\Roaming\\useMango";
+
+                    String motorPath = getMotorPath(umAppData);
+                    ArgumentListBuilder args = getUMCommandArgs(motorPath);
+
+                    listener.getLogger().println("START: Executing test '"+test.getName()+"' on Windows node "+currentNode.getNodeName());
+
+                    Launcher launcher = currentNode.createLauncher(listener);
+                    ProcStarter starter = launcher.new ProcStarter();
 
 		    		// send test output to byte stream
 		    		out = new ByteArrayOutputStream();
@@ -95,23 +104,28 @@ public class UseMangoTestExecutor implements Executable {
 		            	listener.getLogger().println("FAIL: Test '"+test.getName()+"' failed");
 		            }
 
-		            String logsPath = stdout.substring(0, stdout.lastIndexOf("\\run.log"));
-		            logsPath = logsPath.substring(logsPath.lastIndexOf("\n") + 1);
+		            String logsPath = umAppData + "\\Logs";
+					FilePath junitFile = new FilePath(currentNode.getChannel(), logsPath + "\\junit.xml");
 
-                    FilePath junitPath = new FilePath(currentNode.getChannel(), logsPath);
-                    if (junitPath.exists()) {
-                        String junit = IOUtils.toString(junitPath.child("\\junit.xml").read(), StandardCharsets.UTF_8.name());
+					if (!junitFile.exists()) {
+						throw new IOException("useMango Junit log file not found at path '" + junitFile);
+					}
 
-                        // write result to workspace (junit)
-                        workspace.child(ProjectUtils.RESULTS_DIR).
-                                child(ProjectUtils.getJUnitFileName(test.getId())).write(junit, StandardCharsets.UTF_8.name());
+					String junit = IOUtils.toString(junitFile.read(), StandardCharsets.UTF_8.name());
 
-                        listener.getLogger().println("STOP: Outcome saved to workspace for test '" + test.getName() + "'");
-                    } else {
-                        throw new IOException("useMango Junit log file not found at path '" + logsPath);
-                    }
+					// write result to workspace (junit)
+					workspace.child(ProjectUtils.RESULTS_DIR).
+							child(ProjectUtils.getJUnitFileName(test.getId())).write(junit, StandardCharsets.UTF_8.name());
 
-				} catch (IOException | IllegalArgumentException | InterruptedException | NullPointerException  e) {
+					//Setting executionId
+					String subText = "runId=\"";
+					String exId = junit.substring(junit.indexOf(subText) + subText.length());
+					exId = exId.substring(0, exId.indexOf("\""));
+					test.setRunId(exId);
+
+					listener.getLogger().println("STOP: Outcome saved to workspace for test '" + test.getName() + "'");
+				}
+		    	catch (IOException | IllegalArgumentException | InterruptedException | NullPointerException e) {
 					if (workspace != null) {
 						ProjectUtils.createLogFile(workspace, test.getId(), e.getMessage(), listener);
 					}
@@ -144,5 +158,47 @@ public class UseMangoTestExecutor implements Executable {
     public long getEstimatedDuration() {
         return 60000l; // 1 minute
     }
+
+    private ArgumentListBuilder getUMCommandArgs(String motorPath) {
+    	ArgumentListBuilder args = new ArgumentListBuilder();
+    	args.addTokenized(motorPath);
+    	args.addTokenized(" -s \""+useMangoUrl+"\"");
+		args.addTokenized(" -p \""+projectId+"\"");
+		args.addTokenized(" -i \""+test.getId()+"\"");
+		args.addTokenized(" -e \""+credentials.getUsername()+"\"");
+		args.addTokenized(" -a ");
+		args.addMasked(credentials.getPassword().getPlainText());
+		return args;
+    }
+
+
+    private String getMotorPath(String umAppData){
+    	try {
+    		String umApp = umAppData + "\\app";
+			File app;
+
+			//Selecting app branch - dev or public
+			List<File> appBranches = Arrays.asList(Objects.requireNonNull(new File(umApp).listFiles(File::isDirectory)));
+			if(appBranches.stream().anyMatch(b -> b.getName().equalsIgnoreCase("dev"))){
+				app = appBranches.stream().filter(b -> b.getName().equalsIgnoreCase("dev")).findFirst().get();
+			}
+			else if (appBranches.stream().anyMatch(b -> b.getName().equalsIgnoreCase("qa"))) {
+				app = appBranches.stream().filter(b -> b.getName().equalsIgnoreCase("qa")).findFirst().get();
+			}
+			else {
+				app = appBranches.stream().filter(b -> b.getName().equalsIgnoreCase("public")).findFirst().get();
+			}
+
+			//Selecting app version, selecting the highest
+			List<File> appVersions = Arrays.asList(Objects.requireNonNull(app.listFiles(File::isDirectory)));
+			appVersions.sort((o1, o2) -> o1.getName().compareToIgnoreCase(o2.getName()));
+
+			app = appVersions.get(appVersions.size() - 1);
+			return app.getAbsolutePath() + "\\MangoMotor.exe";
+		}
+		catch (NullPointerException e) {
+			throw new RuntimeException(e);
+		}
+	}
 
 }
