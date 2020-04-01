@@ -1,5 +1,6 @@
 package it.infuse.jenkins.usemango;
 
+import hudson.Util;
 import hudson.model.Run;
 import it.infuse.jenkins.usemango.model.TestIndexItem;
 import jenkins.model.RunAction2;
@@ -45,17 +46,17 @@ public class UseMangoTestResultsAction implements RunAction2 {
 
     public List<TestResult> getTests() { return this.tests; }
 
-    public String getErrorMessage() { return this.errorMessage; };
+    public String getErrorMessage() { return this.errorMessage; }
 
     public void addTestResults(List<TestIndexItem> tests){
-        this.tests = new ArrayList<TestResult>();
+        this.tests = new ArrayList<>();
         for (TestIndexItem test: tests) {
             this.tests.add(new TestResult(test.getName(), test.isPassed(), getReportLink(test.getRunId())));
         }
     }
 
     public void setBuildException(String errorMessage){
-        this.errorMessage = errorMessage;
+        this.errorMessage = Util.escape(errorMessage);
     }
 
     private String getReportLink(String runId){
@@ -68,9 +69,9 @@ public class UseMangoTestResultsAction implements RunAction2 {
         public final String reportLink;
 
         public TestResult(String name, Boolean passed, String reportLink){
-            this.name = name;
+            this.name = Util.escape(name);
             this.result = passed ? "Passed" : "Failed";
-            this.reportLink = reportLink;
+            this.reportLink = Util.escape(reportLink);
         }
     }
 }

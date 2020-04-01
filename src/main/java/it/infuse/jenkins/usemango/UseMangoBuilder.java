@@ -82,13 +82,13 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 			throws InterruptedException, IOException{
 
 		List<UseMangoTestTask> testTasks = new ArrayList<UseMangoTestTask>();
-		String serverLink = UseMangoConfiguration.get().getLocation();
-		UseMangoTestResultsAction umTestResultsAction = new UseMangoTestResultsAction(serverLink);
+		// String serverLink = UseMangoConfiguration.get().getLocation();
+		// UseMangoTestResultsAction umTestResultsAction = new UseMangoTestResultsAction(serverLink);
 
 		try {
 			if(!ProjectUtils.hasCorrectPermissions(User.current())){
 				String msg = "Jenkins user '"+User.current()+"' does not have permissions to configure and build this Job - please contact your system administrator, or update the users' security settings.";
-				umTestResultsAction.setBuildException(msg);
+				// umTestResultsAction.setBuildException(msg);
 				listener.error(msg);
 				return false;
 			}
@@ -161,28 +161,28 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 
 				listener.getLogger().println("\nTest execution complete.\n\nThank you for using useMango :-)\n");
 
-				umTestResultsAction.addTestResults(indexes.getItems());
+				// umTestResultsAction.addTestResults(indexes.getItems());
 			}
 			else {
 				String msg = "No tests retrieved from useMango account, please check settings and try again.";
-				umTestResultsAction.setBuildException(msg);
+				// umTestResultsAction.setBuildException(msg);
 				listener.getLogger().println(msg);
 			}
 			return true;
 		}
 		catch (RuntimeException | UseMangoException e) {
-			umTestResultsAction.setBuildException(e.getMessage());
+			// umTestResultsAction.setBuildException(e.getMessage());
 			throw new RuntimeException(e);
 		}
 		catch (InterruptedException e) {
 			for (UseMangoTestTask task: testTasks) {
 				Jenkins.getInstance().getQueue().cancel(task);
 			}
-			umTestResultsAction.setBuildException("Build was aborted, all useMango tests were cancelled.");
+			// umTestResultsAction.setBuildException("Build was aborted, all useMango tests were cancelled.");
 			throw e;
 		}
 		finally {
-			build.addAction(umTestResultsAction);
+			// build.addAction(umTestResultsAction);
 		}
 	}
 	
