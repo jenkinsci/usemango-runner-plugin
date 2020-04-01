@@ -22,4 +22,16 @@ public class Project extends GenericJson {
 		this.name = name;
 	}
 
+	@Override
+	public boolean equals(Object o) {
+		if (!(o instanceof Project)) {
+			return false;
+		}
+		return super.equals(o) && ((Project) o).name.equalsIgnoreCase(name);
+	}
+
+	@Override
+	public int hashCode() {
+		return super.hashCode();
+	}
 }

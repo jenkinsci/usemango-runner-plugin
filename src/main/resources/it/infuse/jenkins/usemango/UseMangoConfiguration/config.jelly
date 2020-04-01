@@ -6,9 +6,6 @@
 	xmlns:c="/lib/credentials">
 	
     <f:section title="${%useMango Location}">
-        <f:entry field="location" title="${%useMango URL}">
-            <f:textbox/>
-        </f:entry>
         <f:entry field="credentialsId" title="${%useMango credentials}" >
         	<c:select/>
      	</f:entry>

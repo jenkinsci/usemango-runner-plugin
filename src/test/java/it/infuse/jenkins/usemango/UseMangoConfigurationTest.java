@@ -24,19 +24,5 @@ public class UseMangoConfigurationTest {
      * <li>misnamed {@code textbox}
      * </ul>
      */
-    @Test
-    public void uiAndStorage() {
-        rr.then(r -> {
-            assertNull("not set initially", UseMangoConfiguration.get().getLocation());
-            HtmlForm config = r.createWebClient().goTo("configure").getFormByName("config");
-            HtmlTextInput textbox = config.getInputByName("_.location");
-            textbox.setText("hello");
-            r.submit(config);
-            assertEquals("global config page let us edit it", "hello", UseMangoConfiguration.get().getLocation());
-        });
-        rr.then(r -> {
-            assertEquals("still there after restart of Jenkins", "hello", UseMangoConfiguration.get().getLocation());
-        });
-    }
 
 }

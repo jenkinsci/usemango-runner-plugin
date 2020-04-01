@@ -54,4 +54,17 @@ public class UmUser extends GenericJson {
     public boolean isAdmin() {
         return IsAdmin;
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof UmUser)) {
+            return false;
+        }
+        return super.equals(o) && ((UmUser) o).Id.equalsIgnoreCase(Id);
+    }
+
+    @Override
+    public int hashCode() {
+        return super.hashCode();
+    }
 }
