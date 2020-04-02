@@ -9,6 +9,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import hudson.Util;
 import hudson.Extension;
 import hudson.FilePath;
 import hudson.Launcher;
@@ -263,7 +264,8 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 				resultsHtml.append("<div id=\"tempTagsContainer\"style=\"max-height:150px;overflow-y:scroll;padding-top:5px;padding-bottom:5px;\">");
 				resultsHtml.append("<ul>");
 				projectTags.forEach((item)->{
-					resultsHtml.append("<li>"+item+"</li>");
+					String tag = Util.escape(item);
+					resultsHtml.append("<li>"+tag+"</li>");
 				});
 				resultsHtml.append("</ul>");
 				resultsHtml.append("</div>");
@@ -302,10 +304,13 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	    			params.setTestName(testName);
 	    			params.setTestStatus(testStatus);
 	    			TestIndexResponse indexes = getTestIndexes(params);
-	    			
+
+					String umURL = Util.escape(APIUtils.TESTSERVICE_URL);
+					String userName = Util.escape(credentials.getUsername());
+
 	    			StringBuilder sb = new StringBuilder();
-    				sb.append("Connecting to <a href=\""+APIUtils.TESTSERVICE_URL+"\" target=\"_blank\">"+APIUtils.TESTSERVICE_URL+"</a>... done.<br/>");
-    				sb.append("Validating account "+credentials.getUsername()+"... done.<br/><br/>");
+					sb.append("Connecting to <a href=\""+umURL+"\" target=\"_blank\">"+umURL+"</a>... done.<br/>");
+					sb.append("Validating account "+userName+"... done.<br/><br/>");
 	    			
 	    			if(indexes != null && indexes.getItems() != null && !indexes.getItems().isEmpty()) {
 	    				int size = indexes.getItems().size();
@@ -314,14 +319,18 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	    				resultsHtml.append("<table width=\"100%\" border=\"0\" cellspacing=\"6\" cellpadding=\"6\" style=\"border:1px solid rgba(0, 0, 0, 0.1);width:100%;background-color:#eee;\">");
 	    				resultsHtml.append("<tr style=\"background-color:rgba(0, 0, 0, 0.1);\" align=\"left\"><th>Name</th><th>Tags</th><th>Status</th><th>Assigned To</th></tr>");
 	    				indexes.getItems().forEach((item)->{
-	    				    String assignee = item.getAssignee();
+							String name = Util.escape(item.getName());
+							List<String> tagsArray = item.getTags().stream().map(t -> Util.escape(t)).collect(Collectors.toList());
+							String testTags = String.join(", ", tagsArray);
+							String status = Util.escape(item.getStatus());
+							String assignee = Util.escape(item.getAssignee());
 	    				    if(!item.getAssignee().isEmpty()){
 	    				        List<UmUser> foundUsers = users.stream().filter(u -> u.getId().equals(item.getAssignee())).collect(Collectors.toList());
 	    				        if(foundUsers.size() > 0){
-	    				            assignee = foundUsers.get(0).getName() + " (" + foundUsers.get(0).getEmail() + ")";
-	    				        }
+									assignee = Util.escape(foundUsers.get(0).getName() + " (" + foundUsers.get(0).getEmail() + ")");
+								}
 	    				    }
-	    				    resultsHtml.append("<tr><td>"+item.getName()+"</td><td>"+String.join(", ", item.getTags())+"</td><td>"+item.getStatus()+"</td><td>"+assignee+"</td></tr>");
+							resultsHtml.append("<tr><td>"+name+"</td><td>"+testTags+"</td><td>"+status+"</td><td>"+assignee+"</td></tr>");
 	    				});
 	    				resultsHtml.append("</table>");
 	    				resultsHtml.append("</div>");
