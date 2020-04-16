@@ -14,18 +14,26 @@ import it.infuse.jenkins.usemango.model.UmUser;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Logger;
 
 public class APIUtils {
 
 	static HttpTransport HTTP_TRANSPORT = new NetHttpTransport();
     static JsonFactory JSON_FACTORY = new JacksonFactory();
-
-    public final static String TESTSERVICE_URL = "https://7xjof06g5f.execute-api.eu-west-1.amazonaws.com";
     final static String API_VERSION = "/v1";
     final static String ENDPOINT_PROJECTS 	= API_VERSION + "/projects";
     final static String ENDPOINT_TESTINDEX = API_VERSION + "/projects/%s/testindex";
     final static String ENDPOINT_USERS = API_VERSION + "/users";
     final static String ENDPOINT_PROJECT_TAGS = ENDPOINT_PROJECTS + "/%s/testtags";
+	private static final Logger LOGGER = Logger.getLogger("useMangoRunner");
+
+	public static String getTestServiceUrl() {
+		String testServiceURL = System.getenv("UM_TESTSSERVICE_URL");
+		if (testServiceURL == null) {
+			testServiceURL = "https://tests.api.usemango.co.uk";
+		}
+		return testServiceURL;
+	}
 
 	public static TestIndexResponse getTestIndex(TestIndexParams params, String idToken) throws IOException {
 		HttpRequestFactory requestFactory = HTTP_TRANSPORT.createRequestFactory(
@@ -34,7 +42,7 @@ public class APIUtils {
 		
 		TestIndexResponse response = null;
 		while(true) { // handle pagination
-		    GenericUrl url = new GenericUrl(TESTSERVICE_URL);
+		    GenericUrl url = new GenericUrl(getTestServiceUrl());
 			url.setRawPath(String.format(ENDPOINT_TESTINDEX, params.getProjectId()));
 			url.set("tags", params.getTags());
 			url.set("filter", params.getTestName());
@@ -62,7 +70,7 @@ public class APIUtils {
 		HttpRequestFactory requestFactory = HTTP_TRANSPORT.createRequestFactory(
 				(HttpRequest request) -> {request.setParser(new JsonObjectParser(JSON_FACTORY));
         });
-		GenericUrl url = new GenericUrl(TESTSERVICE_URL);
+		GenericUrl url = new GenericUrl(getTestServiceUrl());
 		url.setRawPath(String.format(ENDPOINT_PROJECTS));
 		HttpRequest request = requestFactory.buildGetRequest(url);
 		request.setHeaders(getHeadersForServer(idToken));
@@ -74,7 +82,7 @@ public class APIUtils {
 		HttpRequestFactory requestFactory = HTTP_TRANSPORT.createRequestFactory(
 				(HttpRequest request) -> {request.setParser(new JsonObjectParser(JSON_FACTORY));
 				});
-		GenericUrl url = new GenericUrl(TESTSERVICE_URL);
+		GenericUrl url = new GenericUrl(getTestServiceUrl());
 		url.setRawPath(String.format(ENDPOINT_PROJECT_TAGS, project));
 		HttpRequest request = requestFactory.buildGetRequest(url);
 		request.setHeaders(getHeadersForServer(idToken));
@@ -85,7 +93,7 @@ public class APIUtils {
 		HttpRequestFactory requestFactory = HTTP_TRANSPORT.createRequestFactory(
 				(HttpRequest request) -> {request.setParser(new JsonObjectParser(JSON_FACTORY));
 				});
-		GenericUrl url = new GenericUrl(TESTSERVICE_URL);
+		GenericUrl url = new GenericUrl(getTestServiceUrl());
 		url.setRawPath(ENDPOINT_USERS);
 		HttpRequest request = requestFactory.buildGetRequest(url);
 		request.setHeaders(getHeadersForServer(idToken));
@@ -104,5 +112,4 @@ public class APIUtils {
 		headers.setAuthorization("Bearer " + idToken);
 		return headers;
 	}
-	
 }

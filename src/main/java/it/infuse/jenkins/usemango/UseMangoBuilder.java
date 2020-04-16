@@ -78,7 +78,7 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 			throws InterruptedException, IOException{
 
 		List<UseMangoTestTask> testTasks = new ArrayList<UseMangoTestTask>();
-		String serverLink = APIUtils.TESTSERVICE_URL;
+		String serverLink = APIUtils.getTestServiceUrl();
 		UseMangoTestResultsAction umTestResultsAction = new UseMangoTestResultsAction(serverLink);
 
 		try {
@@ -125,7 +125,7 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 				List<String> testIds = new ArrayList<String>();
 				indexes.getItems().forEach((test) -> {
 					try {
-						UseMangoTestTask testTask = new UseMangoTestTask(nodeLabel, build, listener, test, APIUtils.TESTSERVICE_URL, projectId, credentials);
+						UseMangoTestTask testTask = new UseMangoTestTask(nodeLabel, build, listener, test, serverLink, projectId, credentials);
 						testIds.add(test.getId());
 						testTasks.add(testTask);
 						Jenkins.getInstance().getQueue().schedule2(testTask, Jenkins.getInstance().getQuietPeriod());
@@ -305,7 +305,7 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	    			params.setTestStatus(testStatus);
 	    			TestIndexResponse indexes = getTestIndexes(params);
 
-					String umURL = Util.escape(APIUtils.TESTSERVICE_URL);
+					String umURL = Util.escape(APIUtils.getTestServiceUrl());
 					String userName = Util.escape(credentials.getUsername());
 
 	    			StringBuilder sb = new StringBuilder();
