@@ -1,27 +1,26 @@
 package it.infuse.jenkins.usemango;
 
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.text.SimpleDateFormat;
-import java.util.*;
-
 import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials;
-import org.apache.commons.io.IOUtils;
-
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import hudson.Launcher.ProcStarter;
 import hudson.FilePath;
 import hudson.Launcher;
+import hudson.Launcher.ProcStarter;
 import hudson.model.BuildListener;
 import hudson.model.Executor;
 import hudson.model.Node;
 import hudson.model.Queue.Executable;
 import hudson.model.Queue.Task;
+import hudson.remoting.VirtualChannel;
 import hudson.util.ArgumentListBuilder;
 import it.infuse.jenkins.usemango.model.TestIndexItem;
 import it.infuse.jenkins.usemango.util.ProjectUtils;
+import org.apache.commons.io.IOUtils;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Objects;
 
 public class UseMangoTestExecutor implements Executable {
 
@@ -74,7 +73,7 @@ public class UseMangoTestExecutor implements Executable {
                     String userHome = Objects.requireNonNull(currentNode.toComputer()).getSystemProperties().get("user.home").toString();
                     umAppData = userHome + "\\AppData\\Roaming\\useMango";
 
-                    String motorPath = getMotorPath(umAppData);
+                    String motorPath = getMotorPath(umAppData, currentNode.getChannel());
                     ArgumentListBuilder args = getUMCommandArgs(motorPath);
 
                     listener.getLogger().println("START: Executing test '"+test.getName()+"' on Windows node "+currentNode.getNodeName());
@@ -172,33 +171,32 @@ public class UseMangoTestExecutor implements Executable {
     }
 
 
-    private String getMotorPath(String umAppData){
+    private String getMotorPath(String umAppData, VirtualChannel channel){
     	try {
-    		String umApp = umAppData + "\\app";
-			File app;
+    		String umAppDirectory = umAppData + "\\app";
 
-			//Selecting app branch - dev or public
-			List<File> appBranches = Arrays.asList(Objects.requireNonNull(new File(umApp).listFiles(File::isDirectory)));
+			//Selecting app branch - dev, qa or public
+			List<FilePath> appBranches = new FilePath(channel, umAppDirectory).listDirectories();
 			if(appBranches.stream().anyMatch(b -> b.getName().equalsIgnoreCase("dev"))){
-				app = appBranches.stream().filter(b -> b.getName().equalsIgnoreCase("dev")).findFirst().get();
+				umAppDirectory += "\\dev";
 			}
 			else if (appBranches.stream().anyMatch(b -> b.getName().equalsIgnoreCase("qa"))) {
-				app = appBranches.stream().filter(b -> b.getName().equalsIgnoreCase("qa")).findFirst().get();
+				umAppDirectory += "\\qa";
 			}
 			else {
-				app = appBranches.stream().filter(b -> b.getName().equalsIgnoreCase("public")).findFirst().get();
+				umAppDirectory += "\\public";
 			}
 
 			//Selecting app version, selecting the highest
-			List<File> appVersions = Arrays.asList(Objects.requireNonNull(app.listFiles(File::isDirectory)));
+			List<FilePath> appVersions = new FilePath(channel, umAppDirectory).listDirectories();
 			appVersions.sort((o1, o2) -> o1.getName().compareToIgnoreCase(o2.getName()));
+			FilePath app = appVersions.get(appVersions.size() - 1);
 
-			app = appVersions.get(appVersions.size() - 1);
-			return app.getAbsolutePath() + "\\MangoMotor.exe";
+			String appPath = app.toURI().toString().replace("file:/", "");
+			return appPath + "MangoMotor.exe";
 		}
-		catch (NullPointerException e) {
+		catch (NullPointerException | IOException | InterruptedException e) {
 			throw new RuntimeException(e);
 		}
 	}
-
 }
