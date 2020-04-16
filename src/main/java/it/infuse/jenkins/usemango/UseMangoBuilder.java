@@ -125,7 +125,7 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 				List<String> testIds = new ArrayList<String>();
 				indexes.getItems().forEach((test) -> {
 					try {
-						UseMangoTestTask testTask = new UseMangoTestTask(nodeLabel, build, listener, test, serverLink, projectId, credentials);
+						UseMangoTestTask testTask = new UseMangoTestTask(nodeLabel, build, listener, test, projectId, credentials);
 						testIds.add(test.getId());
 						testTasks.add(testTask);
 						Jenkins.getInstance().getQueue().schedule2(testTask, Jenkins.getInstance().getQuietPeriod());

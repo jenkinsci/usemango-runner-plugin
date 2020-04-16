@@ -21,9 +21,9 @@ public class APIUtils {
 	static HttpTransport HTTP_TRANSPORT = new NetHttpTransport();
     static JsonFactory JSON_FACTORY = new JacksonFactory();
     final static String API_VERSION = "/v1";
-    final static String ENDPOINT_PROJECTS 	= API_VERSION + "/projects";
-    final static String ENDPOINT_TESTINDEX = API_VERSION + "/projects/%s/testindex";
-    final static String ENDPOINT_USERS = API_VERSION + "/users";
+    final static String ENDPOINT_PROJECTS 	= "/projects";
+    final static String ENDPOINT_TESTINDEX = "/projects/%s/testindex";
+    final static String ENDPOINT_USERS = "/users";
     final static String ENDPOINT_PROJECT_TAGS = ENDPOINT_PROJECTS + "/%s/testtags";
 	private static final Logger LOGGER = Logger.getLogger("useMangoRunner");
 
@@ -32,7 +32,7 @@ public class APIUtils {
 		if (testServiceURL == null) {
 			testServiceURL = "https://tests.api.usemango.co.uk";
 		}
-		return testServiceURL;
+		return testServiceURL + API_VERSION;
 	}
 
 	public static TestIndexResponse getTestIndex(TestIndexParams params, String idToken) throws IOException {
@@ -43,7 +43,7 @@ public class APIUtils {
 		TestIndexResponse response = null;
 		while(true) { // handle pagination
 		    GenericUrl url = new GenericUrl(getTestServiceUrl());
-			url.setRawPath(String.format(ENDPOINT_TESTINDEX, params.getProjectId()));
+			url.setRawPath(API_VERSION + String.format(ENDPOINT_TESTINDEX, params.getProjectId()));
 			url.set("tags", params.getTags());
 			url.set("filter", params.getTestName());
 			url.set("status", params.getTestStatus());
@@ -71,7 +71,7 @@ public class APIUtils {
 				(HttpRequest request) -> {request.setParser(new JsonObjectParser(JSON_FACTORY));
         });
 		GenericUrl url = new GenericUrl(getTestServiceUrl());
-		url.setRawPath(String.format(ENDPOINT_PROJECTS));
+		url.setRawPath(API_VERSION + ENDPOINT_PROJECTS);
 		HttpRequest request = requestFactory.buildGetRequest(url);
 		request.setHeaders(getHeadersForServer(idToken));
 		HttpResponse response = request.execute();
@@ -83,7 +83,7 @@ public class APIUtils {
 				(HttpRequest request) -> {request.setParser(new JsonObjectParser(JSON_FACTORY));
 				});
 		GenericUrl url = new GenericUrl(getTestServiceUrl());
-		url.setRawPath(String.format(ENDPOINT_PROJECT_TAGS, project));
+		url.setRawPath(API_VERSION + String.format(ENDPOINT_PROJECT_TAGS, project));
 		HttpRequest request = requestFactory.buildGetRequest(url);
 		request.setHeaders(getHeadersForServer(idToken));
 		return (ArrayList<String>)request.execute().parseAs(new TypeToken<ArrayList<String>>(){}.getType());
@@ -94,7 +94,7 @@ public class APIUtils {
 				(HttpRequest request) -> {request.setParser(new JsonObjectParser(JSON_FACTORY));
 				});
 		GenericUrl url = new GenericUrl(getTestServiceUrl());
-		url.setRawPath(ENDPOINT_USERS);
+		url.setRawPath(API_VERSION + ENDPOINT_USERS);
 		HttpRequest request = requestFactory.buildGetRequest(url);
 		request.setHeaders(getHeadersForServer(idToken));
 		return (ArrayList<UmUser>)request.execute().parseAs(new TypeToken<ArrayList<UmUser>>(){}.getType());
