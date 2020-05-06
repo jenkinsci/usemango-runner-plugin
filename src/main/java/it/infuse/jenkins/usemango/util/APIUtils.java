@@ -28,11 +28,19 @@ public class APIUtils {
 	private static final Logger LOGGER = Logger.getLogger("useMangoRunner");
 
 	public static String getTestServiceUrl() {
-		String testServiceURL = System.getenv("UM_TESTSSERVICE_URL");
+		String testServiceURL = System.getenv("UM_TEST_SERVICE_URL");
 		if (testServiceURL == null) {
 			testServiceURL = "https://tests.api.usemango.co.uk";
 		}
 		return testServiceURL + API_VERSION;
+	}
+
+	public static String getTestAppUrl() {
+		String testAppURL = System.getenv("UM_TEST_APP_URL");
+		if (testAppURL == null) {
+			return "https://app.usemango.co.uk";
+		}
+		return testAppURL;
 	}
 
 	public static TestIndexResponse getTestIndex(TestIndexParams params, String idToken) throws IOException {

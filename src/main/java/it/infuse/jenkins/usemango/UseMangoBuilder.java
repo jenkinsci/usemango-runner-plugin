@@ -74,12 +74,11 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	
 	@SuppressFBWarnings(value="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE")
 	@Override
-	public boolean perform(AbstractBuild<?,?> build, Launcher launcher, BuildListener listener) 
+	public boolean perform(AbstractBuild<?,?> build, Launcher launcher, BuildListener listener)
 			throws InterruptedException, IOException{
 
 		List<UseMangoTestTask> testTasks = new ArrayList<UseMangoTestTask>();
-		String serverLink = APIUtils.getTestServiceUrl();
-		UseMangoTestResultsAction umTestResultsAction = new UseMangoTestResultsAction(serverLink);
+		UseMangoTestResultsAction umTestResultsAction = new UseMangoTestResultsAction(APIUtils.getTestAppUrl());
 
 		try {
 			if(!ProjectUtils.hasCorrectPermissions(User.current())){
