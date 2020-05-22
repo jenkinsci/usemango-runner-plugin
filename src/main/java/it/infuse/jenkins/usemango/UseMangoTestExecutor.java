@@ -28,18 +28,16 @@ public class UseMangoTestExecutor implements Executable {
 	private final FilePath workspace;
 	private final BuildListener listener;
 	private final TestIndexItem test;
-	private final String useMangoUrl;
 	private final String projectId;
 	private final StandardUsernamePasswordCredentials credentials;
 
     public UseMangoTestExecutor(Task task, FilePath workspace, BuildListener listener,
-    		TestIndexItem test, String useMangoUrl, String projectId,
+    		TestIndexItem test, String projectId,
             StandardUsernamePasswordCredentials credentials){
     	this.task = task;
     	this.workspace = workspace;
         this.listener = listener;
         this.test = test;
-        this.useMangoUrl = useMangoUrl;
         this.projectId = projectId;
         this.credentials = credentials;
     }
@@ -161,7 +159,6 @@ public class UseMangoTestExecutor implements Executable {
     private ArgumentListBuilder getUMCommandArgs(String motorPath) {
     	ArgumentListBuilder args = new ArgumentListBuilder();
     	args.addTokenized(motorPath);
-    	args.addTokenized(" -s \""+useMangoUrl+"\"");
 		args.addTokenized(" -p \""+projectId+"\"");
 		args.addTokenized(" -i \""+test.getId()+"\"");
 		args.addTokenized(" -e \""+credentials.getUsername()+"\"");

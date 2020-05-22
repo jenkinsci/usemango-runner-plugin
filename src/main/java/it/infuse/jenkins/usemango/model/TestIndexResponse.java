@@ -44,4 +44,16 @@ public class TestIndexResponse extends GenericJson {
 		return info;
 	}
 
+	@Override
+	public boolean equals(Object o) {
+		if (!(o instanceof TestIndexResponse)) {
+			return false;
+		}
+		return super.equals(o);
+	}
+
+	@Override
+	public int hashCode() {
+		return super.hashCode();
+	}
 }

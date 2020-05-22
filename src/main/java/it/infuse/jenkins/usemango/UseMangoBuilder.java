@@ -1,38 +1,19 @@
 package it.infuse.jenkins.usemango;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.*;
-import java.util.stream.Collectors;
-
-import javax.servlet.ServletException;
-
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import hudson.model.*;
-import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.codec.binary.Base64;
-import org.jenkinsci.Symbol;
-import org.kohsuke.stapler.DataBoundConstructor;
-import org.kohsuke.stapler.QueryParameter;
-import org.kohsuke.stapler.verb.POST;
-
 import com.cloudbees.plugins.credentials.CredentialsMatchers;
 import com.cloudbees.plugins.credentials.CredentialsProvider;
 import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials;
 import com.cloudbees.plugins.credentials.domains.DomainRequirement;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.Util;
 import hudson.Extension;
 import hudson.FilePath;
 import hudson.Launcher;
+import hudson.model.*;
 import hudson.security.ACL;
 import hudson.tasks.BuildStep;
 import hudson.tasks.BuildStepDescriptor;
@@ -41,18 +22,32 @@ import hudson.util.FormValidation;
 import hudson.util.ListBoxModel;
 import it.infuse.jenkins.usemango.exception.UseMangoException;
 import it.infuse.jenkins.usemango.model.Project;
-import it.infuse.jenkins.usemango.model.TestIndexItem;
-import it.infuse.jenkins.usemango.model.TestIndexParams;
-import it.infuse.jenkins.usemango.model.TestIndexResponse;
-import it.infuse.jenkins.usemango.model.UmUser;
+import it.infuse.jenkins.usemango.model.*;
 import it.infuse.jenkins.usemango.util.APIUtils;
+import it.infuse.jenkins.usemango.util.AuthUtil;
 import it.infuse.jenkins.usemango.util.ProjectUtils;
 import jenkins.model.Jenkins;
+import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.lang3.StringUtils;
+import org.jenkinsci.Symbol;
+import org.kohsuke.stapler.DataBoundConstructor;
+import org.kohsuke.stapler.QueryParameter;
+import org.kohsuke.stapler.verb.POST;
+
+import javax.servlet.ServletException;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 public class UseMangoBuilder extends Builder implements BuildStep {
 
 	private static StandardUsernamePasswordCredentials credentials;
-	private static String useMangoUrl;
 	private static String ID_TOKEN = null;
 	private static String REFRESH_TOKEN = null;
 	
@@ -63,6 +58,7 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	private String testName;
 	private String testStatus;
 	private String assignedTo;
+	private static final Logger LOGGER = Logger.getLogger("useMangoRunner");
 
 	@DataBoundConstructor
 	public UseMangoBuilder(String useSlaveNodes, String nodeLabel, String projectId, String tags, String testName,
@@ -78,17 +74,16 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	
 	@SuppressFBWarnings(value="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE")
 	@Override
-	public boolean perform(AbstractBuild<?,?> build, Launcher launcher, BuildListener listener) 
+	public boolean perform(AbstractBuild<?,?> build, Launcher launcher, BuildListener listener)
 			throws InterruptedException, IOException{
 
 		List<UseMangoTestTask> testTasks = new ArrayList<UseMangoTestTask>();
-		// String serverLink = UseMangoConfiguration.get().getLocation();
-		// UseMangoTestResultsAction umTestResultsAction = new UseMangoTestResultsAction(serverLink);
+		UseMangoTestResultsAction umTestResultsAction = new UseMangoTestResultsAction(APIUtils.getTestAppUrl());
 
 		try {
 			if(!ProjectUtils.hasCorrectPermissions(User.current())){
 				String msg = "Jenkins user '"+User.current()+"' does not have permissions to configure and build this Job - please contact your system administrator, or update the users' security settings.";
-				// umTestResultsAction.setBuildException(msg);
+				umTestResultsAction.setBuildException(msg);
 				listener.error(msg);
 				return false;
 			}
@@ -129,7 +124,7 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 				List<String> testIds = new ArrayList<String>();
 				indexes.getItems().forEach((test) -> {
 					try {
-						UseMangoTestTask testTask = new UseMangoTestTask(nodeLabel, build, listener, test, useMangoUrl, projectId, credentials);
+						UseMangoTestTask testTask = new UseMangoTestTask(nodeLabel, build, listener, test, projectId, credentials);
 						testIds.add(test.getId());
 						testTasks.add(testTask);
 						Jenkins.getInstance().getQueue().schedule2(testTask, Jenkins.getInstance().getQuietPeriod());
@@ -161,28 +156,28 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 
 				listener.getLogger().println("\nTest execution complete.\n\nThank you for using useMango :-)\n");
 
-				// umTestResultsAction.addTestResults(indexes.getItems());
+				umTestResultsAction.addTestResults(indexes.getItems());
 			}
 			else {
 				String msg = "No tests retrieved from useMango account, please check settings and try again.";
-				// umTestResultsAction.setBuildException(msg);
+				umTestResultsAction.setBuildException(msg);
 				listener.getLogger().println(msg);
 			}
 			return true;
 		}
 		catch (RuntimeException | UseMangoException e) {
-			// umTestResultsAction.setBuildException(e.getMessage());
+			umTestResultsAction.setBuildException(e.getMessage());
 			throw new RuntimeException(e);
 		}
 		catch (InterruptedException e) {
 			for (UseMangoTestTask task: testTasks) {
 				Jenkins.getInstance().getQueue().cancel(task);
 			}
-			// umTestResultsAction.setBuildException("Build was aborted, all useMango tests were cancelled.");
+			umTestResultsAction.setBuildException("Build was aborted, all useMango tests were cancelled.");
 			throw e;
 		}
 		finally {
-			// build.addAction(umTestResultsAction);
+			build.addAction(umTestResultsAction);
 		}
 	}
 	
@@ -309,7 +304,7 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	    			params.setTestStatus(testStatus);
 	    			TestIndexResponse indexes = getTestIndexes(params);
 
-					String umURL = Util.escape(useMangoUrl);
+					String umURL = Util.escape(APIUtils.getTestServiceUrl());
 					String userName = Util.escape(credentials.getUsername());
 
 	    			StringBuilder sb = new StringBuilder();
@@ -373,26 +368,25 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	}
 	
 	private static void loadUseMangoCredentials() throws UseMangoException {
-		useMangoUrl = UseMangoConfiguration.get().getLocation();
 		credentials = getCredentials(UseMangoConfiguration.get().getCredentialsId());
-		
-		if(StringUtils.isBlank(useMangoUrl) || !useMangoUrl.startsWith("http")) 
-			throw new UseMangoException("Invalid useMango url in global configuration (<a href=\"/configure\">view config</a>)");
+
 		if(credentials == null) 
 			throw new UseMangoException("Invalid useMango credentials in global configuration (<a href=\"/configure\">view config</a>)");
 	}
 
-	private static void getTokens() throws UseMangoException, IOException {
+	private static void getTokens() throws UseMangoException {
 		loadUseMangoCredentials();
 		if(credentials == null) throw new UseMangoException("Credentials are null, please check useMango global config");
-		String[] tokens = APIUtils.getAuthenticationTokens(useMangoUrl, credentials.getUsername(), credentials.getPassword().getPlainText());
+		String[] tokens = AuthUtil.getAuthTokens(credentials.getUsername(), credentials.getPassword().getPlainText());
 		ID_TOKEN = tokens[0];
 		REFRESH_TOKEN = tokens[1];
 	}
 
-	private static void refreshIdToken() throws UseMangoException, IOException{
+	private static void refreshIdToken() throws UseMangoException{
 		try{
-			ID_TOKEN = APIUtils.refreshIdToken(useMangoUrl, REFRESH_TOKEN);
+			String[] tokens = AuthUtil.refreshAuthTokens(REFRESH_TOKEN);
+			ID_TOKEN = tokens[0];
+			REFRESH_TOKEN = tokens[1];
 		} catch (UseMangoException e){
 			ID_TOKEN = null;
 			REFRESH_TOKEN = null;
@@ -414,7 +408,7 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 		return expiring.before(now);
 	}
 
-	private static void checkTokenExistsAndValid() throws UseMangoException, IOException {
+	private static void checkTokenExistsAndValid() throws UseMangoException {
 		if(ID_TOKEN == null){
 			getTokens();
 			return;
@@ -427,22 +421,22 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	private static TestIndexResponse getTestIndexes(TestIndexParams params) throws IOException, UseMangoException {
 		checkTokenExistsAndValid();
 		if(params == null) throw new UseMangoException("Test parameters are null, please check useMango build step in job");
-		return APIUtils.getTestIndex(useMangoUrl, params, ID_TOKEN);
+		return APIUtils.getTestIndex(params, ID_TOKEN);
 	}
 	
 	private static List<Project> getProjects() throws IOException, UseMangoException {
 		checkTokenExistsAndValid();
-		return APIUtils.getProjects(useMangoUrl, ID_TOKEN);
+		return APIUtils.getProjects(ID_TOKEN);
 	}
 
 	private static List<String> getProjectTags(String projectId) throws IOException, UseMangoException{
 		checkTokenExistsAndValid();
-		return APIUtils.getProjectTags(useMangoUrl, ID_TOKEN, projectId);
+		return APIUtils.getProjectTags(ID_TOKEN, projectId);
 	}
 
 	private static List<UmUser> getUsers() throws IOException, UseMangoException {
 		checkTokenExistsAndValid();
-		return APIUtils.getUsers(useMangoUrl, ID_TOKEN);
+		return APIUtils.getUsers(ID_TOKEN);
 	}
 	
 	private static void prepareWorkspace(FilePath workspace) throws IOException, InterruptedException {

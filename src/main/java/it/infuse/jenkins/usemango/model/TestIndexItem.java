@@ -82,4 +82,17 @@ public class TestIndexItem extends GenericJson {
 	public void setRunId(String runId) {
 		this.runId = runId;
 	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (!(o instanceof TestIndexItem)) {
+			return false;
+		}
+		return super.equals(o) && ((TestIndexItem) o).id.equalsIgnoreCase(id);
+	}
+
+	@Override
+	public int hashCode() {
+		return super.hashCode();
+	}
 }

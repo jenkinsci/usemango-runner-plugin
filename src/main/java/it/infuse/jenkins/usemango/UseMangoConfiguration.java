@@ -34,21 +34,6 @@ public class UseMangoConfiguration extends GlobalConfiguration {
         load();
     }
 
-    /** @return the currently configured location, if any */
-    public String getLocation() {
-        return location;
-    }
-
-    /**
-     * Together with {@link #getLocation}, binds to entry in {@code config.jelly}.
-     * @param location the new value of this field
-     */
-    @DataBoundSetter
-    public void setLocation(String location) {
-        this.location = location;
-        save();
-    }
-
 	/**
 	 * @return the credentialsId
 	 */

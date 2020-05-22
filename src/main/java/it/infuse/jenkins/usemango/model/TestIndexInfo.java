@@ -62,5 +62,17 @@ public class TestIndexInfo extends GenericJson {
 	public void setHasPrevious(boolean hasPrevious) {
 		this.hasPrevious = hasPrevious;
 	}
-	
+
+	@Override
+	public boolean equals(Object o) {
+		if (!(o instanceof TestIndexInfo)) {
+			return false;
+		}
+		return super.equals(o);
+	}
+
+	@Override
+	public int hashCode() {
+		return super.hashCode();
+	}
 }
