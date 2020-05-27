@@ -37,7 +37,7 @@ public class AuthUtil {
         try {
             String clientId = System.getenv("UM_CLIENT_ID");
             if (clientId == null) {
-                clientId = "2emkha1qfrtpjmfvaq1jehot4b";
+                clientId = "1tehh8kqqp2jnbe3o52r0ojk47";
             }
 
             AWSCognitoIdentityProvider cognitoClient = AWSCognitoIdentityProviderClientBuilder
