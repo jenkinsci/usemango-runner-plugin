@@ -41,8 +41,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 public class UseMangoBuilder extends Builder implements BuildStep {
@@ -58,7 +57,6 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	private String testName;
 	private String testStatus;
 	private String assignedTo;
-	private static final Logger LOGGER = Logger.getLogger("useMangoRunner");
 
 	@DataBoundConstructor
 	public UseMangoBuilder(String useSlaveNodes, String nodeLabel, String projectId, String tags, String testName,
@@ -121,42 +119,58 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 
 				listener.getLogger().println(indexes.getItems().size() + " tests retrieved:\n"+gson.toJson(indexes.getItems()));
 
-				List<String> testIds = new ArrayList<String>();
+				List<String> logList = new ArrayList<>();
+				List<ExecutableTest> executions = new ArrayList<>();
+				BiConsumer<TestIndexItem, Scenario> queueTest = (indexItem, scenario) -> {
+					ExecutableTest exeTest = new ExecutableTest(indexItem, scenario);
+					UseMangoTestTask testTask = new UseMangoTestTask(nodeLabel, build, listener, exeTest, projectId, credentials);
+					executions.add(exeTest);
+					testTasks.add(testTask);
+					Jenkins.getInstance().getQueue().schedule2(testTask, Jenkins.getInstance().getQuietPeriod());
+					logList.add(ProjectUtils.getLogFileName(exeTest));
+				};
 				indexes.getItems().forEach((test) -> {
 					try {
-						UseMangoTestTask testTask = new UseMangoTestTask(nodeLabel, build, listener, test, projectId, credentials);
-						testIds.add(test.getId());
-						testTasks.add(testTask);
-						Jenkins.getInstance().getQueue().schedule2(testTask, Jenkins.getInstance().getQuietPeriod());
+						if (test.getHasScenarios()){
+							List<Scenario> scenarios = getTestScenarios(this.projectId, test.getId());
+							scenarios.forEach((scenario) -> {
+								queueTest.accept(test, scenario);
+							});
+						}
+						else {
+							queueTest.accept(test, null);
+						}
 					} catch(Exception e) {
 						listener.error("Error executing test: "+test.getName());
 						throw new RuntimeException(e);
 					}
 				});
 
-				String testId;
-				while(!testIds.isEmpty()) { // keep alive until all test tasks are done
-					testId = null;
-					for(String tempId : testIds) {
+				while(!logList.isEmpty()) { // keep alive until all test tasks are done
+					String logFileName = null;
+					for(String item : logList) {
 						if(build.getWorkspace().child(ProjectUtils.LOG_DIR).
-								child(ProjectUtils.getLogFileName(tempId)).exists()) {
-							testId = tempId;
+								child(item).exists()) {
+							logFileName = item;
 						}
 					}
-					if(testId != null) testIds.remove(testId);
+					if(logFileName != null) logList.remove(logFileName);
 					Thread.sleep(1000);
 				}
 
 				boolean testSuitePassed = true;
-				for(TestIndexItem test : indexes.getItems()) {
-					if(!test.isPassed()) testSuitePassed = false;
+				for(ExecutableTest test : executions) {
+					if (!test.isPassed()) {
+						testSuitePassed = false;
+						break;
+					}
 				}
 
 				if(!testSuitePassed) build.setResult(Result.FAILURE); // set job to failure if a test failed
 
 				listener.getLogger().println("\nTest execution complete.\n\nThank you for using useMango :-)\n");
 
-				umTestResultsAction.addTestResults(indexes.getItems());
+				umTestResultsAction.addTestResults(executions);
 			}
 			else {
 				String msg = "No tests retrieved from useMango account, please check settings and try again.";
@@ -316,28 +330,37 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	    				
 	    				StringBuilder resultsHtml = new StringBuilder("<div style=\"max-height:300px;overflow-y:scroll;padding-top:5px;\">");
 	    				resultsHtml.append("<table width=\"100%\" border=\"0\" cellspacing=\"6\" cellpadding=\"6\" style=\"border:1px solid rgba(0, 0, 0, 0.1);width:100%;background-color:#eee;\">");
-	    				resultsHtml.append("<tr style=\"background-color:rgba(0, 0, 0, 0.1);\" align=\"left\"><th>Name</th><th>Tags</th><th>Status</th><th>Assigned To</th></tr>");
-	    				indexes.getItems().forEach((item)->{
+	    				resultsHtml.append("<tr style=\"background-color:rgba(0, 0, 0, 0.1);\" align=\"left\"><th>Name</th><th>Tags</th><th>Status</th><th>Assigned To</th><th>Scenarios</th></tr>");
+						indexes.getItems().forEach((item)-> {
 							String name = Util.escape(item.getName());
 							List<String> tagsArray = item.getTags().stream().map(t -> Util.escape(t)).collect(Collectors.toList());
 							String testTags = String.join(", ", tagsArray);
 							String status = Util.escape(item.getStatus());
 							String assignee = Util.escape(item.getAssignee());
-	    				    if(!item.getAssignee().isEmpty()){
-	    				        List<UmUser> foundUsers = users.stream().filter(u -> u.getId().equals(item.getAssignee())).collect(Collectors.toList());
-	    				        if(foundUsers.size() > 0){
+							if (!item.getAssignee().isEmpty()) {
+								List<UmUser> foundUsers = users.stream().filter(u -> u.getId().equals(item.getAssignee())).collect(Collectors.toList());
+								if (foundUsers.size() > 0) {
 									assignee = Util.escape(foundUsers.get(0).getName() + " (" + foundUsers.get(0).getEmail() + ")");
 								}
-	    				    }
-							resultsHtml.append("<tr><td>"+name+"</td><td>"+testTags+"</td><td>"+status+"</td><td>"+assignee+"</td></tr>");
-	    				});
+							}
+							String scenarioCount = "0";
+							if (item.getHasScenarios()) {
+								try {
+									scenarioCount = String.valueOf(getTestScenarios(projectId, item.getId()).size());
+								}
+								catch (IOException | UseMangoException e){
+									scenarioCount = "Failed to load scenarios for test: " + e.getMessage();
+								}
+							}
+							resultsHtml.append("<tr><td>" + name + "</td><td>" + testTags + "</td><td>" + status + "</td><td>" + assignee + "</td><td>" + scenarioCount + "</td></tr>");
+						});
 	    				resultsHtml.append("</table>");
 	    				resultsHtml.append("</div>");
 	    				
 	    				sb.append("<b>Test"+((size>1)?"s":"")+" matched in account ("+size+"):</b><br/>");
 	    				
 	    				return FormValidation.okWithMarkup(sb.toString()+resultsHtml);
-	    			} 
+	    			}
 	    			else {
 	    				return FormValidation.warningWithMarkup(sb.toString()+"No tests matched in account. Please check settings above and try again.");
 	    			}
@@ -423,6 +446,12 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 		if(params == null) throw new UseMangoException("Test parameters are null, please check useMango build step in job");
 		return APIUtils.getTestIndex(params, ID_TOKEN);
 	}
+
+	private static List<Scenario> getTestScenarios(String projectId, String testId) throws  IOException, UseMangoException {
+		checkTokenExistsAndValid();
+		return APIUtils.getScenarios(ID_TOKEN, projectId, testId);
+	}
+
 	
 	private static List<Project> getProjects() throws IOException, UseMangoException {
 		checkTokenExistsAndValid();

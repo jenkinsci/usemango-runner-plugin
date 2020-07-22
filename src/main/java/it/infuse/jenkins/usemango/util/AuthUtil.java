@@ -23,6 +23,7 @@ public class AuthUtil {
         authParams.put("USERNAME", username);
         authParams.put("PASSWORD", password);
 
+        Log.fine("Authenticating user - " + username);
         return initiateAuthRequest(AuthFlowType.USER_PASSWORD_AUTH, authParams);
     }
 
@@ -30,6 +31,7 @@ public class AuthUtil {
         final Map<String, String> authParams = new HashMap<>();
         authParams.put("REFRESH_TOKEN", refreshToken);
 
+        Log.fine("Refreshing authentication tokens");
         return initiateAuthRequest(AuthFlowType.REFRESH_TOKEN_AUTH, authParams);
     }
 
@@ -54,8 +56,10 @@ public class AuthUtil {
             InitiateAuthResult result = cognitoClient.initiateAuth(authRequest);
             String idToken = result.getAuthenticationResult().getIdToken();
             String refreshToken = result.getAuthenticationResult().getRefreshToken();
+            Log.fine("Completed Cognito request.");
             return new String[] {idToken, refreshToken};
         } catch (AWSCognitoIdentityProviderException e) {
+            Log.severe("Cognito request failed: '" + e.getErrorMessage());
             throw new UseMangoException(e.getMessage());
         }
     }

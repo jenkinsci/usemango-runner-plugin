@@ -2,21 +2,25 @@ package it.infuse.jenkins.usemango;
 
 import hudson.Util;
 import hudson.model.Run;
-import it.infuse.jenkins.usemango.model.TestIndexItem;
+import it.infuse.jenkins.usemango.model.ExecutableTest;
+import it.infuse.jenkins.usemango.model.Scenario;
 import jenkins.model.RunAction2;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 public class UseMangoTestResultsAction implements RunAction2 {
 
     private transient Run run;
     private List<TestResult> tests;
     private String errorMessage;
-    private String serverLink;
+    private final String serverLink;
 
     public UseMangoTestResultsAction(String serverLink) {
         this.serverLink = serverLink;
+        this.tests = new ArrayList<>();
     }
 
     @Override
@@ -48,11 +52,28 @@ public class UseMangoTestResultsAction implements RunAction2 {
 
     public String getErrorMessage() { return this.errorMessage; }
 
-    public void addTestResults(List<TestIndexItem> tests){
-        this.tests = new ArrayList<>();
-        for (TestIndexItem test: tests) {
-            this.tests.add(new TestResult(test.getName(), test.isPassed(), getReportLink(test.getRunId())));
-        }
+    public void addTestResults(List<ExecutableTest> executedTests){
+        Map<String, List<ExecutableTest>> counting = executedTests.stream().collect(
+                Collectors.groupingBy(ExecutableTest::getId));
+
+        counting.forEach((id, testScenarios) -> {
+            if (testScenarios.size() > 1) {
+                boolean testPassed = true;
+                List<TestResult> scenarioResults = new ArrayList<>();
+                for (ExecutableTest exeScenario: testScenarios) {
+                    if (!exeScenario.isPassed()) { testPassed = false; }
+                    Scenario scenario = exeScenario.getScenario();
+                    TestResult result = new TestResult(scenario.getName(), exeScenario.isPassed(), getReportLink(exeScenario.getRunId()), null);
+                    scenarioResults.add(result);
+                }
+                this.tests.add(new TestResult(testScenarios.get(0).getName(), testPassed, null, scenarioResults));
+            }
+            else {
+                ExecutableTest first = testScenarios.get(0);
+                TestResult result = new TestResult(first.getName(), first.isPassed(), getReportLink(first.getRunId()), null);
+                this.tests.add(result);
+            }
+        });
     }
 
     public void setBuildException(String errorMessage){
@@ -67,11 +88,13 @@ public class UseMangoTestResultsAction implements RunAction2 {
         public final String name;
         public final String result;
         public final String reportLink;
+        public final List<TestResult> scenarios;
 
-        public TestResult(String name, Boolean passed, String reportLink){
+        public TestResult(String name, Boolean passed, String reportLink, List<TestResult> scenarios){
             this.name = Util.escape(name);
             this.result = passed ? "Passed" : "Failed";
             this.reportLink = Util.escape(reportLink);
+            this.scenarios = scenarios;
         }
     }
 }

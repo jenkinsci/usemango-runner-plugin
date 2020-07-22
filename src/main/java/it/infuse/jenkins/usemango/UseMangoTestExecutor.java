@@ -12,7 +12,8 @@ import hudson.model.Queue.Executable;
 import hudson.model.Queue.Task;
 import hudson.remoting.VirtualChannel;
 import hudson.util.ArgumentListBuilder;
-import it.infuse.jenkins.usemango.model.TestIndexItem;
+import it.infuse.jenkins.usemango.model.ExecutableTest;
+import it.infuse.jenkins.usemango.model.Scenario;
 import it.infuse.jenkins.usemango.util.ProjectUtils;
 import org.apache.commons.io.IOUtils;
 
@@ -27,12 +28,12 @@ public class UseMangoTestExecutor implements Executable {
 	private final Task task;
 	private final FilePath workspace;
 	private final BuildListener listener;
-	private final TestIndexItem test;
+	private final ExecutableTest test;
 	private final String projectId;
 	private final StandardUsernamePasswordCredentials credentials;
 
     public UseMangoTestExecutor(Task task, FilePath workspace, BuildListener listener,
-    		TestIndexItem test, String projectId,
+			ExecutableTest test, String projectId,
             StandardUsernamePasswordCredentials credentials){
     	this.task = task;
     	this.workspace = workspace;
@@ -88,9 +89,6 @@ public class UseMangoTestExecutor implements Executable {
 
 					String stdout = out.toString(StandardCharsets.UTF_8.name());
 
-					// write byte stream to workspace (log)
-					ProjectUtils.createLogFile(workspace, test.getId(), stdout, listener);
-
 					// write outcome to listener (console)
 					if(exitCode == 0) {
 						test.setPassed(true);
@@ -110,21 +108,24 @@ public class UseMangoTestExecutor implements Executable {
 
 					String junit = IOUtils.toString(junitFile.read(), StandardCharsets.UTF_8.name());
 
-					// write result to workspace (junit)
-					workspace.child(ProjectUtils.RESULTS_DIR).
-							child(ProjectUtils.getJUnitFileName(test.getId())).write(junit, StandardCharsets.UTF_8.name());
-
 					//Setting executionId
 					String subText = "runId=\"";
 					String exId = junit.substring(junit.indexOf(subText) + subText.length());
 					exId = exId.substring(0, exId.indexOf("\""));
 					test.setRunId(exId);
 
+					// write byte stream to workspace (log)
+					ProjectUtils.createLogFile(workspace, test, stdout, listener);
+
+					// write result to workspace (junit)
+					workspace.child(ProjectUtils.RESULTS_DIR).
+							child(ProjectUtils.getJUnitFileName(test)).write(junit, StandardCharsets.UTF_8.name());
+
 					listener.getLogger().println("STOP: Outcome saved to workspace for test '" + test.getName() + "'");
 				}
 		    	catch (IOException | IllegalArgumentException | InterruptedException | NullPointerException e) {
 					if (workspace != null) {
-						ProjectUtils.createLogFile(workspace, test.getId(), e.getMessage(), listener);
+						ProjectUtils.createLogFile(workspace, test, e.getMessage(), listener);
 					}
 					listener.error(e.getMessage());
 				}
@@ -139,14 +140,14 @@ public class UseMangoTestExecutor implements Executable {
 	    	else {
 	    		test.setPassed(false);
 	    		String failureMessage = "Failed to execute test: Node '"+currentNode.getDisplayName()+"' does not have Windows OS.";
-	    		ProjectUtils.createLogFile(workspace, test.getId(), failureMessage, listener);
+	    		ProjectUtils.createLogFile(workspace, test, failureMessage, listener);
 	    		listener.error(failureMessage);
 	    	}
     	}
     	else {
     		test.setPassed(false);
     		String failureMessage = "Failed to execute test: Node is null.";
-    		ProjectUtils.createLogFile(workspace, test.getId(), failureMessage, listener);
+    		ProjectUtils.createLogFile(workspace, test, failureMessage, listener);
     		listener.error(failureMessage);
     	}
     }
@@ -161,6 +162,12 @@ public class UseMangoTestExecutor implements Executable {
     	args.addTokenized(motorPath);
 		args.addTokenized(" -p \""+projectId+"\"");
 		args.addTokenized(" -i \""+test.getId()+"\"");
+
+		Scenario scenario = test.getScenario();
+		if (scenario != null) {
+			args.addTokenized(" -s \""+scenario.getId()+"\"");
+		}
+
 		args.addTokenized(" -e \""+credentials.getUsername()+"\"");
 		args.addTokenized(" -a ");
 		args.addMasked(credentials.getPassword().getPlainText());
