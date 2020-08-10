@@ -54,10 +54,7 @@ public class ProjectUtils {
 	}
 	
 	public static boolean hasCorrectPermissions(User user) {
-		if(user != null && user.hasPermission(Job.CONFIGURE) && user.hasPermission(Job.BUILD)) {
-			return true;
-		}
-		else return false;
+		return user != null && user.hasPermission(Job.CONFIGURE) && user.hasPermission(Job.BUILD);
 	}
 
 	private static String getFileName(String extension, ExecutableTest test){

@@ -13,12 +13,14 @@ import it.infuse.jenkins.usemango.exception.UseMangoException;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.logging.Logger;
 
 public class AuthUtil {
-    private static final Logger LOGGER = Logger.getLogger("useMangoRunner");
 
     public static String[] getAuthTokens(String username, String password) throws UseMangoException {
+        if (StringUtils.isBlank(username) || StringUtils.isBlank(password)){
+            Log.severe("Username or password is null when requesting auth tokens. Username '" + username + "' and password '" + password + "'");
+            throw new UseMangoException("Missing username or password when requesting auth tokens.");
+        }
         final Map<String, String> authParams = new HashMap<>();
         authParams.put("USERNAME", username);
         authParams.put("PASSWORD", password);
@@ -28,6 +30,10 @@ public class AuthUtil {
     }
 
     public static String[] refreshAuthTokens(String refreshToken) throws UseMangoException {
+        if (StringUtils.isBlank(refreshToken)){
+            Log.severe("Refresh token is null when refreshing auth tokens");
+            throw new UseMangoException("Missing refresh token when refreshing auth tokens.");
+        }
         final Map<String, String> authParams = new HashMap<>();
         authParams.put("REFRESH_TOKEN", refreshToken);
 

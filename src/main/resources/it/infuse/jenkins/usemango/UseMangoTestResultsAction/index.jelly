@@ -17,7 +17,15 @@
                             <j:forEach var="testResult" items="${it.tests}">
                                 <j:if test="${testResult.scenarios == null}">
                                     <li class="list-group-item d-flex justify-content-between align-items-center">
-                                        <a href="${testResult.reportLink}" target="_blank"><h5 class="m-0">${testResult.name}</h5></a>
+                                        <j:if test="${testResult.reportLink != null}">
+                                            <a href="${testResult.reportLink}" target="_blank"><h5 class="m-0">${testResult.name}</h5></a>
+                                        </j:if>
+                                        <j:if test="${testResult.reportLink == null}">
+                                            <h6 class="m-0">
+                                                ${testResult.name}
+                                                <small class="text-danger font-italic">(Report not available)</small>
+                                             </h6>
+                                        </j:if>
                                         <j:if test="${testResult.result == 'Passed'}">
                                             <h5 class="m-0"><span class="badge badge-success badge-pill p-2 px-3">Passed</span></h5>
                                         </j:if>
@@ -33,7 +41,15 @@
                                             <ul class="list-group">
                                                 <j:forEach var="scenarioResult" items="${testResult.scenarios}">
                                                     <li class="list-group-item d-flex justify-content-between align-items-center border-0 pr-0 pb-0 mb-0">
-                                                        <a href="${scenarioResult.reportLink}" target="_blank"><h6 class="m-0">${scenarioResult.name}</h6></a>
+                                                        <j:if test="${scenarioResult.reportLink != null}">
+                                                            <a href="${scenarioResult.reportLink}" target="_blank"><h6 class="m-0">${scenarioResult.name}</h6></a>
+                                                        </j:if>
+                                                        <j:if test="${scenarioResult.reportLink == null}">
+                                                            <h6 class="m-0">
+                                                                ${scenarioResult.name}
+                                                                <small class="text-danger font-italic">(Report not available)</small>
+                                                             </h6>
+                                                        </j:if>
                                                         <j:if test="${scenarioResult.result == 'Passed'}">
                                                             <h5 class="m-0"><span class="badge badge-success badge-pill p-2 px-3">Passed</span></h5>
                                                         </j:if>
