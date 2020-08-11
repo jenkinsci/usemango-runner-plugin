@@ -124,10 +124,7 @@ public class APIUtils {
 	}
 	
 	private static boolean isAnotherPage(TestIndexResponse response) {
-		if(response != null && response.getInfo() != null && response.getInfo().isHasNext()) {
-			return true;
-		}
-		else return false;
+		return response != null && response.getInfo() != null && response.getInfo().isHasNext();
 	}
 
 	private static HttpHeaders getHeadersForServer(String idToken){

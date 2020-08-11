@@ -25,6 +25,7 @@ import it.infuse.jenkins.usemango.model.Project;
 import it.infuse.jenkins.usemango.model.*;
 import it.infuse.jenkins.usemango.util.APIUtils;
 import it.infuse.jenkins.usemango.util.AuthUtil;
+import it.infuse.jenkins.usemango.util.Log;
 import it.infuse.jenkins.usemango.util.ProjectUtils;
 import jenkins.model.Jenkins;
 import org.apache.commons.codec.binary.Base64;
@@ -49,7 +50,7 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	private static StandardUsernamePasswordCredentials credentials;
 	private static String ID_TOKEN = null;
 	private static String REFRESH_TOKEN = null;
-	
+
 	private String useSlaveNodes;
 	private String nodeLabel;
 	private String projectId;
@@ -88,7 +89,7 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 
 			prepareWorkspace(build.getWorkspace());
 
-			boolean useSlaves = Boolean.valueOf(useSlaveNodes);
+			boolean useSlaves = Boolean.parseBoolean(useSlaveNodes);
 			if(!useSlaves || StringUtils.isBlank(nodeLabel)) {
 				listener.getLogger().println("Not using labelled nodes, or no label defined.");
 				nodeLabel = "master"; // default to 'master'
@@ -383,10 +384,10 @@ public class UseMangoBuilder extends Builder implements BuildStep {
     }
 
 	private static StandardUsernamePasswordCredentials getCredentials(String credentialsId) {
-		List<StandardUsernamePasswordCredentials> credentailsList = CredentialsProvider.lookupCredentials(
+		List<StandardUsernamePasswordCredentials> credentialsList = CredentialsProvider.lookupCredentials(
 				StandardUsernamePasswordCredentials.class, Jenkins.getInstance(), ACL.SYSTEM,
 					Collections.<DomainRequirement> emptyList());
-		return CredentialsMatchers.firstOrNull(credentailsList,
+		return CredentialsMatchers.firstOrNull(credentialsList,
                 CredentialsMatchers.allOf(CredentialsMatchers.withId(credentialsId)));
 	}
 	
@@ -407,14 +408,14 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 
 	private static void refreshIdToken() throws UseMangoException{
 		try{
-			String[] tokens = AuthUtil.refreshAuthTokens(REFRESH_TOKEN);
-			ID_TOKEN = tokens[0];
-			REFRESH_TOKEN = tokens[1];
+			ID_TOKEN = AuthUtil.refreshAuthTokens(REFRESH_TOKEN);
 		} catch (UseMangoException e){
 			ID_TOKEN = null;
 			REFRESH_TOKEN = null;
 			// Only handling the expired refresh token exception here other exceptions thrown will be related to other issues
-			if (e.getMessage() == "Expired refresh token"){
+			String msg = e.getMessage();
+			Log.severe("Refreshing auth tokens failed: '" + msg + "'");
+			if (msg.contains("Expired refresh token") || msg.contains("Missing refresh token")){
 				getTokens();
 			}
 		}
@@ -432,9 +433,8 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	}
 
 	private static void checkTokenExistsAndValid() throws UseMangoException {
-		if(ID_TOKEN == null){
+		if(ID_TOKEN == null || REFRESH_TOKEN == null){
 			getTokens();
-			return;
 		}
 		else if(isTokenExpired()){
 			refreshIdToken();

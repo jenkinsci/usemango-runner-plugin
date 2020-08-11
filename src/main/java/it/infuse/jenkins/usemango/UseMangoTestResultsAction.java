@@ -4,6 +4,7 @@ import hudson.Util;
 import hudson.model.Run;
 import it.infuse.jenkins.usemango.model.ExecutableTest;
 import it.infuse.jenkins.usemango.model.Scenario;
+import it.infuse.jenkins.usemango.util.StringUtils;
 import jenkins.model.RunAction2;
 
 import java.util.ArrayList;
@@ -80,8 +81,13 @@ public class UseMangoTestResultsAction implements RunAction2 {
         this.errorMessage = Util.escape(errorMessage);
     }
 
-    private String getReportLink(String runId){
-        return serverLink + "/report.html?runId=" + runId;
+    private String getReportLink(String runId) {
+        if (!StringUtils.isBlank(runId)) {
+            return serverLink + "/report.html?runId=" + runId;
+        }
+        else {
+            return null;
+        }
     }
 
     public static class TestResult {
