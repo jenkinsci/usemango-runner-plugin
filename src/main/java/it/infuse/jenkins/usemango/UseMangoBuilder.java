@@ -408,9 +408,7 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 
 	private static void refreshIdToken() throws UseMangoException{
 		try{
-			String[] tokens = AuthUtil.refreshAuthTokens(REFRESH_TOKEN);
-			ID_TOKEN = tokens[0];
-			REFRESH_TOKEN = tokens[1];
+			ID_TOKEN = AuthUtil.refreshAuthTokens(REFRESH_TOKEN);
 		} catch (UseMangoException e){
 			ID_TOKEN = null;
 			REFRESH_TOKEN = null;
@@ -435,7 +433,7 @@ public class UseMangoBuilder extends Builder implements BuildStep {
 	}
 
 	private static void checkTokenExistsAndValid() throws UseMangoException {
-		if(ID_TOKEN == null){
+		if(ID_TOKEN == null || REFRESH_TOKEN == null){
 			getTokens();
 		}
 		else if(isTokenExpired()){
