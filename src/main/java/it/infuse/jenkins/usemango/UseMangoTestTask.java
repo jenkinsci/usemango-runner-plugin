@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 
 import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials;
+import it.infuse.jenkins.usemango.model.ExecutableTest;
 import org.acegisecurity.AccessDeniedException;
 
 import hudson.model.AbstractBuild;
@@ -18,7 +19,6 @@ import hudson.model.queue.SubTask;
 import hudson.security.ACL;
 import hudson.security.AccessControlled;
 import hudson.security.Permission;
-import it.infuse.jenkins.usemango.model.TestIndexItem;
 import it.infuse.jenkins.usemango.util.ProjectUtils;
 
 public class UseMangoTestTask extends AbstractQueueTask implements AccessControlled {
@@ -26,12 +26,12 @@ public class UseMangoTestTask extends AbstractQueueTask implements AccessControl
 	private final String nodeLabel;
 	private final AbstractBuild<?,?> build;
 	private final BuildListener listener;
-	private final TestIndexItem test;
+	private final ExecutableTest test;
 	private final String projectId;
 	private final StandardUsernamePasswordCredentials credentials;
 
     public UseMangoTestTask(String nodeLabel, AbstractBuild<?,?> build, BuildListener listener,
-    		TestIndexItem test, String projectId,
+			ExecutableTest test, String projectId,
 			StandardUsernamePasswordCredentials credentials) {
 		this.nodeLabel = nodeLabel;
     	this.build = build;
@@ -42,7 +42,7 @@ public class UseMangoTestTask extends AbstractQueueTask implements AccessControl
     }
 
     public String getName() {
-    	return ProjectUtils.getJenkinsTestTaskName(test.getName(), build.getParent().getName(), build.number);
+    	return ProjectUtils.getJenkinsTestTaskName(test, build.getParent().getName(), build.number);
     }
 
     public String getFullDisplayName() {

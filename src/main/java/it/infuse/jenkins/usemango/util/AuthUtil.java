@@ -13,27 +13,40 @@ import it.infuse.jenkins.usemango.exception.UseMangoException;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.logging.Logger;
 
 public class AuthUtil {
-    private static final Logger LOGGER = Logger.getLogger("useMangoRunner");
 
     public static String[] getAuthTokens(String username, String password) throws UseMangoException {
+        if (StringUtils.isBlank(username) || StringUtils.isBlank(password)){
+            Log.severe("Username or password is null when requesting auth tokens.");
+            throw new UseMangoException("Missing username or password when requesting auth tokens.");
+        }
         final Map<String, String> authParams = new HashMap<>();
         authParams.put("USERNAME", username);
         authParams.put("PASSWORD", password);
 
-        return initiateAuthRequest(AuthFlowType.USER_PASSWORD_AUTH, authParams);
+        Log.fine("Authenticating user - " + username);
+        InitiateAuthResult result = initiateAuthRequest(AuthFlowType.USER_PASSWORD_AUTH, authParams);
+
+        String idToken = result.getAuthenticationResult().getIdToken();
+        String refreshToken = result.getAuthenticationResult().getRefreshToken();
+        return new String[] {idToken, refreshToken};
     }
 
-    public static String[] refreshAuthTokens(String refreshToken) throws UseMangoException {
+    public static String refreshAuthTokens(String refreshToken) throws UseMangoException {
+        if (StringUtils.isBlank(refreshToken)){
+            Log.severe("Refresh token is null when refreshing auth tokens");
+            throw new UseMangoException("Missing refresh token when refreshing auth tokens.");
+        }
         final Map<String, String> authParams = new HashMap<>();
         authParams.put("REFRESH_TOKEN", refreshToken);
 
-        return initiateAuthRequest(AuthFlowType.REFRESH_TOKEN_AUTH, authParams);
+        Log.fine("Refreshing authentication tokens");
+        InitiateAuthResult result = initiateAuthRequest(AuthFlowType.REFRESH_TOKEN_AUTH, authParams);
+        return result.getAuthenticationResult().getIdToken();
     }
 
-    private static String[] initiateAuthRequest(AuthFlowType flowType, Map<String, String> authParams) throws UseMangoException {
+    private static InitiateAuthResult initiateAuthRequest(AuthFlowType flowType, Map<String, String> authParams) throws UseMangoException {
         try {
             String clientId = System.getenv("UM_CLIENT_ID");
             if (clientId == null) {
@@ -52,10 +65,10 @@ public class AuthUtil {
                     .withAuthParameters(authParams);
 
             InitiateAuthResult result = cognitoClient.initiateAuth(authRequest);
-            String idToken = result.getAuthenticationResult().getIdToken();
-            String refreshToken = result.getAuthenticationResult().getRefreshToken();
-            return new String[] {idToken, refreshToken};
+            Log.fine("Completed Cognito request.");
+            return result;
         } catch (AWSCognitoIdentityProviderException e) {
+            Log.severe("Cognito request failed: '" + e.getErrorMessage());
             throw new UseMangoException(e.getMessage());
         }
     }
