@@ -53,7 +53,7 @@ public class JUnitMerger {
             }
 
             rootSuite.setAttribute("time", Float.toString(time));
-            rootSuite.setAttribute("tests", String.valueOf(testCount));
+            rootSuite.setAttribute("tests", Integer.toString(testCount));
             rootSuite.setAttribute("failures", Integer.toString(failures));
 
             Transformer transformer = TransformerFactory.newInstance().newTransformer();
