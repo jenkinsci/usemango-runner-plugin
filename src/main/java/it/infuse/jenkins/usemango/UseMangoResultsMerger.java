@@ -14,11 +14,11 @@ import it.infuse.jenkins.usemango.util.JUnitMerger;
 import it.infuse.jenkins.usemango.util.ProjectUtils;
 import org.apache.commons.io.filefilter.SuffixFileFilter;
 import org.apache.commons.lang3.StringUtils;
-import org.kohsuke.stapler.AncestorInPath;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.QueryParameter;
 
 import javax.servlet.ServletException;
+import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
@@ -85,28 +85,23 @@ public class UseMangoResultsMerger extends Notifier {
             return false;
         }
 
-        String combinedFile = destinationFolder + "/" + filename;
-        workspace.child(combinedFile).write(mergedXML, StandardCharsets.UTF_8.name());
-        jobLogger.println("Finished combining useMango test results. File can be found at '" + combinedFile + "'");
+        String filePath = destinationFolder + "/" + filename;
+        FilePath combinedFile =  new FilePath(new File(filePath));
+        combinedFile.write(mergedXML, StandardCharsets.UTF_8.name());
+        jobLogger.println("Finished combining useMango test results. File can be found at '" + filePath + "'");
         return true;
     }
 
     @Extension
     public final static class DescriptorImpl extends BuildStepDescriptor<Publisher> {
 
-        public FormValidation doCheckDestinationFolder(@AncestorInPath AbstractProject project,
-            @QueryParameter String destinationFolder) throws IOException, ServletException
+        public FormValidation doCheckDestinationFolder(@QueryParameter String destinationFolder)
+                throws IOException, ServletException
         {
-            if (project == null || !project.hasPermission(Item.WORKSPACE)) return FormValidation.ok();
-
-            FilePath workspace = project.getSomeWorkspace();
-            if (workspace == null) return FormValidation.ok();
-
-            FormValidation validation = workspace.validateFileMask(destinationFolder, false, false);
-            if (validation.kind == FormValidation.Kind.WARNING) {
-                return FormValidation.warning(validation.getMessage() + ". Any missing directories will be created at the time of execution.");
+            if (StringUtils.isNotBlank(destinationFolder)) {
+                return FormValidation.ok();
             }
-            return validation;
+            return FormValidation.error("Must specify a destination folder");
         }
 
         public FormValidation doCheckFilename(@QueryParameter String filename)
